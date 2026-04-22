@@ -14,4 +14,7 @@ class Producto:
 # --- Prueba de ejecución ---
 laptop = Producto("Laptop", 5)
 laptop.vender(10) 
+moto = Producto("Motocicleta", 10)
+moto.vender(15)
 print(f"Stock final de {laptop.nombre}: {laptop.stock}")
+print(f"Stock final de {moto.nombre}: {moto.stock}")
