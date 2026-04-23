@@ -5,6 +5,7 @@
 
 import sqlite3
 import json
+from datetime import datetime
 
 
 class DatabaseManager:
@@ -99,9 +100,9 @@ class DatabaseManager:
         teams_json = json.dumps(teams)
 
         c.execute('''
-            INSERT INTO groups (name, students, num_teams, teams, notes)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (name, students_json, num_teams, teams_json, notes))
+            INSERT INTO groups (name, students, num_teams, teams, notes, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (name, students_json, num_teams, teams_json, notes, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
 
         conn.commit()
         group_id = c.lastrowid
@@ -147,6 +148,15 @@ class DatabaseManager:
         conn.commit()
         conn.close()
 
+    def update_group_students(self, group_id, students):
+        """Actualiza la lista de alumnos de un grupo."""
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        students_json = json.dumps(students)
+        c.execute('UPDATE groups SET students = ? WHERE id = ?', (students_json, group_id))
+        conn.commit()
+        conn.close()
+
     # ── Historial ─────────────────────────────────────────────────────────────
 
     def save_draw_history(self, group_name, teams, notes="", group_id=None):
@@ -157,9 +167,9 @@ class DatabaseManager:
         teams_json = json.dumps(teams)
 
         c.execute('''
-            INSERT INTO draw_history (group_id, group_name, teams, notes)
-            VALUES (?, ?, ?, ?)
-        ''', (group_id, group_name, teams_json, notes))
+            INSERT INTO draw_history (group_id, group_name, teams, notes, drawn_at)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (group_id, group_name, teams_json, notes, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
 
         conn.commit()
         conn.close()
@@ -190,14 +200,14 @@ class DatabaseManager:
             c.execute('''
                 UPDATE leaderboard
                 SET points = points + ?, wheel_spins = wheel_spins + 1,
-                    last_updated = CURRENT_TIMESTAMP
+                    last_updated = ?
                 WHERE student_name = ?
-            ''', (points, student_name))
+            ''', (points, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), student_name))
         else:
             c.execute('''
-                INSERT INTO leaderboard (student_name, points, wheel_spins)
-                VALUES (?, ?, 1)
-            ''', (student_name, points))
+                INSERT INTO leaderboard (student_name, points, wheel_spins, last_updated)
+                VALUES (?, ?, 1, ?)
+            ''', (student_name, points, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
 
         conn.commit()
         conn.close()
@@ -228,7 +238,8 @@ class DatabaseManager:
         """Crea una nueva actividad ligada a un grupo."""
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
-        c.execute('INSERT INTO activities (name, group_id) VALUES (?, ?)', (name, group_id))
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        c.execute('INSERT INTO activities (name, group_id, created_at) VALUES (?, ?, ?)', (name, group_id, now))
         conn.commit()
         activity_id = c.lastrowid
         conn.close()
@@ -245,8 +256,15 @@ class DatabaseManager:
             ORDER BY a.created_at DESC
         ''')
         rows = c.fetchall()
-        conn.close()
         return rows
+
+    def update_activity_name(self, activity_id, new_name):
+        """Actualiza el nombre de una actividad."""
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        c.execute('UPDATE activities SET name = ? WHERE id = ?', (new_name, activity_id))
+        conn.commit()
+        conn.close()
 
     def register_submission(self, activity_id, student_name):
         """Registra la entrega de un alumno y le asigna la siguiente posición disponible."""
@@ -268,11 +286,12 @@ class DatabaseManager:
         ''', (activity_id,))
         count = c.fetchone()[0]
         position = count + 1
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         c.execute('''
-            INSERT INTO activity_submissions (activity_id, student_name, position)
-            VALUES (?, ?, ?)
-        ''', (activity_id, student_name, position))
+            INSERT INTO activity_submissions (activity_id, student_name, position, submitted_at)
+            VALUES (?, ?, ?, ?)
+        ''', (activity_id, student_name, position, now))
         
         conn.commit()
         conn.close()
@@ -283,7 +302,7 @@ class DatabaseManager:
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         c.execute('''
-            SELECT student_name, position, submitted_at 
+            SELECT student_name, position, submitted_at, id
             FROM activity_submissions 
             WHERE activity_id = ? 
             ORDER BY position ASC
@@ -291,3 +310,11 @@ class DatabaseManager:
         rows = c.fetchall()
         conn.close()
         return rows
+
+    def update_submission_time(self, submission_id, new_time):
+        """Actualiza la hora de una entrega específica."""
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        c.execute('UPDATE activity_submissions SET submitted_at = ? WHERE id = ?', (new_time, submission_id))
+        conn.commit()
+        conn.close()

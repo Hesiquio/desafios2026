@@ -168,6 +168,12 @@ class ScreensMixin:
                                lambda gid=group_id: self._load_and_sort(gid),
                                color=BTN_PRIMARY, px=12, py=6,
                                font=self.f_small).pack(side="left", padx=3)
+                
+                self._make_btn(bc, "✏️",
+                               lambda gid=group_id: self._edit_group_students(gid),
+                               color="#4361EE", px=12, py=6,
+                               font=self.f_small).pack(side="left", padx=3)
+
                 self._make_btn(bc, "Eliminar",
                                lambda gid=group_id: self._delete_group_confirm(gid),
                                color="#EF233C", px=12, py=6,
@@ -200,6 +206,41 @@ class ScreensMixin:
         if messagebox.askyesno("Confirmar", "¿Eliminar este grupo?"):
             self.db.delete_group(group_id)
             self.show_groups_list()
+
+    def _edit_group_students(self, group_id):
+        """Abre un editor para los nombres de los alumnos del grupo."""
+        data = self.db.load_group(group_id)
+        if not data: return
+
+        # Ventana de edición
+        win = tk.Toplevel(self)
+        win.title(f"Editar Alumnos: {data['name']}")
+        win.geometry("500x600")
+        win.configure(bg=BG_MAIN)
+        win.transient(self)
+        win.grab_set()
+
+        tk.Label(win, text=f"Editando Alumnos de: {data['name']}", 
+                 font=self.f_title, bg=BG_MAIN, pady=10).pack()
+
+        txt = tk.Text(win, font=self.f_body, height=20)
+        txt.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        # Cargar nombres actuales
+        txt.insert("1.0", "\n".join(data['students']))
+
+        def _save():
+            raw = txt.get("1.0", "end-1c").strip()
+            new_list = [l.strip() for l in raw.splitlines() if l.strip()]
+            if not new_list:
+                messagebox.showerror("Error", "La lista no puede estar vacía.")
+                return
+            self.db.update_group_students(group_id, new_list)
+            win.destroy()
+            self.show_groups_list()
+
+        self._make_btn(win, "💾 Guardar Cambios", _save, color="#06D6A0").pack(pady=10)
+        self._make_btn(win, "Cancelar", win.destroy, color="#6C757D").pack(pady=5)
 
     # =========================================================================
     #  PANTALLA — HISTORIAL

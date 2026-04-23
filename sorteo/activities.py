@@ -45,7 +45,7 @@ class ActivitiesMixin:
         try:
             activities = self.db.get_activities()
         except Exception:
-            activities = [] # Manejar si la tabla está vacía o hay error de esquema inicial
+            activities = []
 
         if not activities:
             tk.Label(sf, text="No hay actividades creadas.",
@@ -73,6 +73,10 @@ class ActivitiesMixin:
                                lambda a=aid, n=name: self.show_activity_ranking(a, n),
                                color="#FF9F1C", px=10, py=5, font=self.f_small).pack(side="left", padx=2)
 
+                self._make_btn(btn_frame, "✏️", 
+                               lambda a=aid, n=name: self._edit_activity_dialog(a, n),
+                               color="#4361EE", px=8, py=5, font=self.f_small).pack(side="left", padx=2)
+
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
@@ -89,10 +93,9 @@ class ActivitiesMixin:
         name = simpledialog.askstring("Nueva Actividad", "¿Nombre de la tarea?")
         if not name: return
 
-        # Crear ventana pequeña para elegir grupo
         win = tk.Toplevel(self)
         win.title("Seleccionar Grupo")
-        win.geometry("350x400")
+        win.geometry("350x450")
         win.configure(bg=BG_MAIN)
         win.transient(self)
         win.grab_set()
@@ -129,13 +132,11 @@ class ActivitiesMixin:
         body = tk.Frame(self.container, bg=BG_MAIN, padx=30, pady=20)
         body.pack(fill="both", expand=True)
 
-        # Cargar alumnos del grupo directamente de la BD
         group_data = self.db.load_group(group_id)
         if not group_data:
             tk.Label(body, text="Error: No se pudo cargar el grupo.", fg="#EF233C").pack()
             return
 
-        # Botones de navegación arriba para visibilidad
         bf = tk.Frame(body, bg=BG_MAIN, pady=10)
         bf.pack(fill="x")
         self._make_btn(bf, "← Volver a Actividades", self.show_activities_menu,
@@ -143,11 +144,10 @@ class ActivitiesMixin:
         self._make_btn(bf, "🏆 Ver Ranking Actual", lambda: self.show_activity_ranking(activity_id, activity_name),
                        color="#FF9F1C", px=15, py=8).pack(side="left", padx=5)
 
-        students_list = group_data['students'] # <--- Restaurado
+        students_list = group_data['students']
         tk.Label(body, text=f"Grupo: {group_data['name']} | Haz clic para marcar entrega:",
                  font=self.f_body, bg=BG_MAIN, fg=TEXT_DARK).pack(pady=(10, 15))
 
-        # Grid de botones (ahora con scroll por si son muchos alumnos)
         canvas_wrap = tk.Frame(body, bg=BG_MAIN)
         canvas_wrap.pack(fill="both", expand=True)
 
@@ -196,21 +196,63 @@ class ActivitiesMixin:
         body = tk.Frame(self.container, bg=BG_MAIN, padx=30, pady=20)
         body.pack(fill="both", expand=True)
 
+        # Botón de navegación arriba
+        bf_top = tk.Frame(body, bg=BG_MAIN, pady=10)
+        bf_top.pack(fill="x")
+        self._make_btn(bf_top, "← Volver a Actividades", self.show_activities_menu,
+                       color="#6C757D", px=15, py=8).pack(side="left")
+
         ranking = self.db.get_activity_ranking(activity_id)
 
         if not ranking:
             tk.Label(body, text="Aún no hay entregas registradas.",
                      font=self.f_body, bg=BG_MAIN, fg=TEXT_MUTED).pack(pady=20)
         else:
-            for student, pos, time in ranking:
-                card = tk.Frame(body, bg=BG_CARD, highlightbackground=BTN_PRIMARY if pos <= 3 else "#DEE2E6",
+            # Contenedor con Scroll
+            canvas_wrap = tk.Frame(body, bg=BG_MAIN)
+            canvas_wrap.pack(fill="both", expand=True)
+
+            canvas = tk.Canvas(canvas_wrap, bg=BG_MAIN, highlightthickness=0)
+            scrollbar = tk.Scrollbar(canvas_wrap, command=canvas.yview)
+            sf_ranking = tk.Frame(canvas, bg=BG_MAIN)
+
+            sf_ranking.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+            canvas.create_window((0, 0), window=sf_ranking, anchor="nw")
+            canvas.configure(yscrollcommand=scrollbar.set)
+            
+            canvas.pack(side="left", fill="both", expand=True)
+            scrollbar.pack(side="right", fill="y")
+
+            for student, pos, time, sid in ranking:
+                card = tk.Frame(sf_ranking, bg=BG_CARD, highlightbackground=BTN_PRIMARY if pos <= 3 else "#DEE2E6",
                                 highlightthickness=2 if pos <= 3 else 1, padx=15, pady=8)
                 card.pack(fill="x", pady=4)
                 
                 medal = "🥇" if pos == 1 else "🥈" if pos == 2 else "🥉" if pos == 3 else f"#{pos}"
                 tk.Label(card, text=f"{medal}  {student}", font=self.f_name, bg=BG_CARD, fg=TEXT_DARK).pack(side="left")
-                tk.Label(card, text=f"Hora: {time.split(' ')[1]}", font=self.f_small, bg=BG_CARD, fg=TEXT_MUTED).pack(side="right")
+                
+                info_frame = tk.Frame(card, bg=BG_CARD)
+                info_frame.pack(side="right")
+                
+                tk.Label(info_frame, text=f"Hora: {time.split(' ')[1] if ' ' in time else time}", 
+                         font=self.f_small, bg=BG_CARD, fg=TEXT_MUTED).pack(side="left", padx=5)
+                
+                self._make_btn(info_frame, "✏️", 
+                               lambda s=sid, t=time, a=activity_id, n=activity_name: self._edit_submission_time_dialog(s, t, a, n),
+                               color="#6C757D", px=5, py=2, font=self.f_small).pack(side="left")
 
         btn_frame = tk.Frame(body, bg=BG_MAIN, pady=15)
         btn_frame.pack()
-        self._make_btn(btn_frame, "← Volver", self.show_activities_menu, color="#6C757D", px=20, py=10).pack()
+        self._make_btn(btn_frame, "← Volver", self.show_main_menu, color="#6C757D", px=20, py=10).pack()
+
+    def _edit_activity_dialog(self, activity_id, current_name):
+        new_name = simpledialog.askstring("Editar Actividad", "¿Nuevo nombre para la tarea?", initialvalue=current_name)
+        if new_name and new_name != current_name:
+            self.db.update_activity_name(activity_id, new_name)
+            self.show_activities_menu()
+
+    def _edit_submission_time_dialog(self, submission_id, current_time, aid, aname):
+        new_time = simpledialog.askstring("Editar Hora", "Formato YYYY-MM-DD HH:MM:SS", initialvalue=current_time)
+        if new_time and new_time != current_time:
+            self.db.update_submission_time(submission_id, new_time)
+            self.show_activity_ranking(aid, aname)
