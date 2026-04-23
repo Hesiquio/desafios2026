@@ -86,7 +86,7 @@ class ScreensMixin:
         btn_frame.pack(fill="both")
 
         self._make_btn(btn_frame, "🎲   Nuevo Sorteo",
-                       self.show_config_screen,
+                       self._pick_group_for_sorteo,
                        color="#4361EE", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
 
         self._make_btn(btn_frame, "📁   Gestionar Grupos",
@@ -369,123 +369,134 @@ class ScreensMixin:
     #  PANTALLA 1 — CONFIGURACIÓN
     # =========================================================================
 
-    def show_config_screen(self):
-        """Construye y muestra la pantalla de configuración inicial."""
+    def _pick_group_for_sorteo(self):
+        """Muestra una lista rápida para elegir qué grupo sortear."""
+        groups = self.db.get_groups()
+        if not groups:
+            if messagebox.askyesno("Sin Grupos", "No tienes grupos guardados. ¿Deseas ir a Gestionar Grupos para crear uno?"):
+                self.show_groups_list()
+            return
+
+        # Ventana de selección rápida
+        win = tk.Toplevel(self)
+        win.title("Seleccionar Grupo")
+        win.geometry("400x500")
+        win.configure(bg=BG_MAIN)
+        win.transient(self)
+        win.grab_set()
+
+        tk.Label(win, text="¿Qué grupo deseas sortear?", 
+                 font=self.f_title, bg=BG_MAIN, pady=15).pack()
+
+        lb = tk.Listbox(win, font=self.f_body, height=12)
+        lb.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        for gid, gname, date in groups:
+            lb.insert("end", f"{gname} ({len(json.loads(self.db.load_group(gid)['students']))} alumnos)")
+
+        def _confirm():
+            sel = lb.curselection()
+            if not sel: return
+            group_id = groups[sel[0]][0]
+            win.destroy()
+            self.show_config_screen(group_id)
+
+        self._make_btn(win, "Siguiente →", _confirm, color=BTN_PRIMARY).pack(pady=10)
+        self._make_btn(win, "Cancelar", win.destroy, color="#6C757D").pack(pady=5)
+
+    def show_config_screen(self, group_id):
+        """Pantalla de configuración para un grupo específico."""
+        data = self.db.load_group(group_id)
+        if not data: return
+        
         self._clear()
+        self.current_group_id = group_id
+        self.current_group_name = data['name']
+        self.students = data['students']
 
         hdr = tk.Frame(self.container, bg=BG_HEADER, pady=18)
         hdr.pack(fill="x")
-        tk.Label(hdr, text="⚽  Sorteo de Equipos",
+        tk.Label(hdr, text=f"🎲  SORTEO: {data['name']}",
                  font=self.f_header, bg=BG_HEADER, fg=TEXT_LIGHT).pack()
-        tk.Label(hdr, text="Al estilo Champions League — ¡Que empiece el drama!",
-                 font=self.f_small, bg=BG_HEADER, fg=TEXT_MUTED).pack(pady=(3, 0))
 
         body = tk.Frame(self.container, bg=BG_MAIN, padx=40, pady=28)
         body.pack(fill="both", expand=True)
-        body.columnconfigure(0, weight=3)
-        body.columnconfigure(1, weight=1)
-        body.rowconfigure(1, weight=1)
-
-        # ── Panel izquierdo: área de texto ────────────────────────────────
-        self._labeled_section(body, "📋  Lista de Alumnos   (uno por línea):", 0, 0)
-
-        txt_wrap = tk.Frame(body, bg=BG_CARD,
-                            highlightbackground="#CED4DA", highlightthickness=1)
-        txt_wrap.grid(row=1, column=0, sticky="nsew", padx=(0, 18))
-
-        sb = tk.Scrollbar(txt_wrap)
-        sb.pack(side="right", fill="y")
-
-        self.txt_students = tk.Text(
-            txt_wrap, yscrollcommand=sb.set,
-            font=self.f_body, bg=BG_CARD, fg=TEXT_MUTED,
-            relief="flat", bd=10, wrap="word",
-            insertbackground=BTN_PRIMARY,
-        )
-        self.txt_students.pack(fill="both", expand=True)
-        sb.config(command=self.txt_students.yview)
-
-        _PH = (
-            "Escribe o pega los nombres aquí…\n\n"
-            "Ejemplo:\nAna García\nCarlos López\nMaría Pérez\n…"
-        )
-        self.txt_students.insert("1.0", _PH)
-
-        def _focus_in(e):
-            if self.txt_students.get("1.0", "end-1c") == _PH:
-                self.txt_students.delete("1.0", "end")
-                self.txt_students.config(fg=TEXT_DARK)
-
-        self.txt_students.bind("<FocusIn>", _focus_in)
-        self.txt_students.bind("<KeyRelease>", self._refresh_info)
-
-        # ── Panel derecho: configuración ──────────────────────────────────
-        right = tk.Frame(body, bg=BG_MAIN)
-        right.grid(row=0, column=1, rowspan=2, sticky="nsew")
-
-        card = tk.Frame(right, bg=BG_CARD, padx=22, pady=22,
-                        highlightbackground="#DEE2E6", highlightthickness=1)
-        card.pack(fill="x", pady=(30, 0))
-
-        tk.Label(card, text="⚙️  Configuración",
+        
+        # Resumen del grupo
+        info_card = tk.Frame(body, bg=BG_CARD, padx=20, pady=20, 
+                             highlightbackground="#DEE2E6", highlightthickness=1)
+        info_card.pack(fill="x", pady=(0, 30))
+        
+        tk.Label(info_card, text=f"Integrantes del grupo ({len(self.students)}):", 
                  font=self.f_title, bg=BG_CARD, fg=TEXT_DARK).pack(anchor="w")
-        tk.Frame(card, height=1, bg="#DEE2E6").pack(fill="x", pady=10)
+        
+        # Lista de nombres con posibilidad de excluir
+        names_wrap = tk.Frame(info_card, bg=BG_CARD)
+        names_wrap.pack(fill="both", expand=True, pady=10)
 
-        tk.Label(card, text="Número de Equipos:",
-                 font=self.f_body, bg=BG_CARD, fg=TEXT_DARK).pack(anchor="w", pady=(8, 4))
+        canvas = tk.Canvas(names_wrap, bg=BG_CARD, height=150, highlightthickness=0)
+        scrollbar = tk.Scrollbar(names_wrap, command=canvas.yview)
+        self.scrollable_names = tk.Frame(canvas, bg=BG_CARD)
+
+        self.scrollable_names.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=self.scrollable_names, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        self.student_vars = {}
+        cols = 3
+        for i, student in enumerate(sorted(self.students)):
+            var = tk.BooleanVar(value=True)
+            self.student_vars[student] = var
+            
+            cb = tk.Checkbutton(self.scrollable_names, text=student, variable=var, 
+                               font=self.f_small, bg=BG_CARD, activebackground=BG_CARD,
+                               fg=TEXT_DARK, selectcolor=BG_HEADER, cursor="hand2",
+                               command=self._refresh_present_count)
+            cb.grid(row=i // cols, column=i % cols, sticky="w", padx=10, pady=2)
+
+        self.lbl_present = tk.Label(info_card, text=f"Alumnos presentes: {len(self.students)}", 
+                                    font=self.f_small, bg=BG_CARD, fg=BTN_PRIMARY)
+        self.lbl_present.pack(anchor="e")
+
+        # Configuración de equipos
+        cfg_frame = tk.Frame(body, bg=BG_MAIN)
+        cfg_frame.pack()
+
+        tk.Label(cfg_frame, text="¿En cuántos equipos deseas dividir al grupo?", 
+                 font=self.f_body, bg=BG_MAIN, fg=TEXT_DARK).pack(pady=(0, 10))
 
         vcmd = (self.register(lambda s: s.isdigit() or s == ""), "%P")
-        e_wrap = tk.Frame(card, bg=BG_CARD,
-                          highlightbackground=BTN_PRIMARY, highlightthickness=2)
-        e_wrap.pack(fill="x", pady=(0, 14))
-        self.entry_teams = tk.Entry(
-            e_wrap, font=self.f_title, bg=BG_CARD, fg=TEXT_DARK,
-            relief="flat", bd=8, justify="center",
-            insertbackground=BTN_PRIMARY, validate="key", validatecommand=vcmd,
-        )
-        self.entry_teams.insert(0, "2")
-        self.entry_teams.pack(fill="x")
-        self.entry_teams.bind("<KeyRelease>", self._refresh_info)
-
-        tk.Frame(card, height=1, bg="#DEE2E6").pack(fill="x", pady=4)
-
-        tk.Label(card, text="Nombre del Grupo (opcional):",
-                 font=self.f_body, bg=BG_CARD, fg=TEXT_DARK).pack(anchor="w", pady=(8, 4))
-        e_group = tk.Frame(card, bg=BG_CARD,
-                           highlightbackground=BTN_PRIMARY, highlightthickness=2)
-        e_group.pack(fill="x", pady=(0, 14))
-        self.entry_group_name = tk.Entry(
-            e_group, font=self.f_body, bg=BG_CARD, fg=TEXT_DARK,
-            relief="flat", bd=8, insertbackground=BTN_PRIMARY,
-        )
-        self.entry_group_name.insert(0, "Mi Grupo")
-        self.entry_group_name.pack(fill="x")
-
-        tk.Frame(card, height=1, bg="#DEE2E6").pack(fill="x", pady=4)
-
-        self.lbl_info = tk.Label(
-            card, text="Ingresa los alumnos →",
-            font=self.f_small, bg=BG_CARD, fg=TEXT_MUTED,
-            wraplength=160, justify="center",
-        )
-        self.lbl_info.pack(pady=12)
-
-        # ── Botón iniciar ─────────────────────────────────────────────────
-        btn_row = tk.Frame(body, bg=BG_MAIN)
-        btn_row.grid(row=2, column=0, columnspan=2, pady=(22, 0))
-        btn_subrow = tk.Frame(btn_row, bg=BG_MAIN)
-        btn_subrow.pack()
-
-        self._make_btn(btn_subrow, "🎲   INICIAR SORTEO", self._start_sorteo,
-                       color=BTN_PRIMARY, px=30, py=14, font=self.f_btn).pack(side="left", padx=5)
+        e_wrap = tk.Frame(cfg_frame, bg=BG_CARD, highlightbackground=BTN_PRIMARY, highlightthickness=2)
+        e_wrap.pack(pady=5)
         
-        self._make_btn(btn_subrow, "← Volver", self.show_main_menu,
-                       color="#6C757D", hover="#495057", px=20, py=14,
-                       font=self.f_btn).pack(side="left", padx=5)
+        self.entry_teams = tk.Entry(
+            e_wrap, font=self.f_header, bg=BG_CARD, fg=TEXT_DARK,
+            relief="flat", bd=8, justify="center", width=5,
+            validate="key", validatecommand=vcmd
+        )
+        self.entry_teams.insert(0, str(data['num_teams']))
+        self.entry_teams.pack()
 
-        self.lbl_error = tk.Label(body, text="", font=self.f_small,
-                                  bg=BG_MAIN, fg="#EF233C")
-        self.lbl_error.grid(row=3, column=0, columnspan=2, pady=(8, 0))
+        self.lbl_error = tk.Label(body, text="", font=self.f_small, bg=BG_MAIN, fg="#EF233C")
+        self.lbl_error.pack(pady=10)
+
+        # Botones finales
+        btn_row = tk.Frame(body, bg=BG_MAIN)
+        btn_row.pack(pady=20)
+        
+        self._make_btn(btn_row, "🚀  ¡INICIAR SORTEO!", self._start_sorteo,
+                       color=BTN_PRIMARY, px=40, py=15).pack(side="left", padx=10)
+        
+        self._make_btn(btn_row, "← Volver", self.show_main_menu,
+                       color="#6C757D", px=20, py=15).pack(side="left", padx=10)
+
+    def _refresh_present_count(self):
+        """Actualiza el contador de alumnos seleccionados."""
+        present = [s for s, var in self.student_vars.items() if var.get()]
+        self.lbl_present.config(text=f"Alumnos presentes: {len(present)}")
 
     # ── Helpers de configuración ──────────────────────────────────────────
 
@@ -519,8 +530,9 @@ class ScreensMixin:
                 if line.strip() and line.strip() not in bad]
 
     def _start_sorteo(self):
-        """Valida la entrada y, si pasa, arranca la pantalla de sorteo."""
-        names = self._parse_names()
+        """Valida y arranca el sorteo usando solo los alumnos seleccionados."""
+        # Filtrar alumnos presentes de la lista de checkboxes
+        names = [s for s, var in self.student_vars.items() if var.get()]
 
         try:
             nt = int(self.entry_teams.get())
@@ -529,7 +541,7 @@ class ScreensMixin:
             return
 
         if not names:
-            self.lbl_error.config(text="⚠  La lista de alumnos está vacía.")
+            self.lbl_error.config(text="⚠  No hay alumnos seleccionados para el sorteo.")
             return
         if nt < 2:
             self.lbl_error.config(text="⚠  Deben ser al menos 2 equipos.")
