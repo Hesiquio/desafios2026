@@ -56,6 +56,27 @@ class DatabaseManager:
             )
         ''')
 
+        # Tabla de actividades
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS activities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Tabla de entregas (registra el orden)
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS activity_submissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                activity_id INTEGER,
+                student_name TEXT NOT NULL,
+                position INTEGER,
+                submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(activity_id) REFERENCES activities(id)
+            )
+        ''')
+
         conn.commit()
         conn.close()
 
@@ -192,3 +213,68 @@ class DatabaseManager:
         c.execute('DELETE FROM leaderboard')
         conn.commit()
         conn.close()
+
+    # ── Actividades ───────────────────────────────────────────────────────────
+
+    def create_activity(self, name):
+        """Crea una nueva actividad."""
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        c.execute('INSERT INTO activities (name) VALUES (?)', (name,))
+        conn.commit()
+        activity_id = c.lastrowid
+        conn.close()
+        return activity_id
+
+    def get_activities(self):
+        """Retorna todas las actividades."""
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        c.execute('SELECT id, name, created_at FROM activities ORDER BY created_at DESC')
+        rows = c.fetchall()
+        conn.close()
+        return rows
+
+    def register_submission(self, activity_id, student_name):
+        """Registra la entrega de un alumno y le asigna la siguiente posición disponible."""
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        
+        # Verificar si ya entregó
+        c.execute('''
+            SELECT id FROM activity_submissions 
+            WHERE activity_id = ? AND student_name = ?
+        ''', (activity_id, student_name))
+        if c.fetchone():
+            conn.close()
+            return False # Ya entregó
+
+        # Obtener la siguiente posición
+        c.execute('''
+            SELECT COUNT(*) FROM activity_submissions WHERE activity_id = ?
+        ''', (activity_id,))
+        count = c.fetchone()[0]
+        position = count + 1
+
+        c.execute('''
+            INSERT INTO activity_submissions (activity_id, student_name, position)
+            VALUES (?, ?, ?)
+        ''', (activity_id, student_name, position))
+        
+        conn.commit()
+        conn.close()
+        return position
+
+    def get_activity_ranking(self, activity_id):
+        """Obtiene el ranking de una actividad específica."""
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        c.execute('''
+            SELECT student_name, position, submitted_at 
+            FROM activity_submissions 
+            WHERE activity_id = ? 
+            ORDER BY position ASC
+        ''', (activity_id,))
+        rows = c.fetchall()
+        conn.close()
+        return rows

@@ -97,6 +97,10 @@ class ScreensMixin:
                        self.show_wheel_screen,
                        color="#F72585", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
 
+        self._make_btn(btn_frame, "📋   Control de Actividades",
+                       self.show_activities_menu,
+                       color="#06D6A0", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
+
         self._make_btn(btn_frame, "📊   Ver Historial de Sorteos",
                        self.show_history,
                        color="#FF9F1C", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")

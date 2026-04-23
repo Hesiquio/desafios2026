@@ -11,9 +11,10 @@ from .database import DatabaseManager
 from .screens import ScreensMixin
 from .sorteo_screen import SorteoScreenMixin
 from .wheel import WheelMixin
+from .activities import ActivitiesMixin
 
 
-class SorteoApp(ScreensMixin, SorteoScreenMixin, WheelMixin, tk.Tk):
+class SorteoApp(ScreensMixin, SorteoScreenMixin, WheelMixin, ActivitiesMixin, tk.Tk):
     """
     Ventana raíz de la aplicación.
     Hereda de los mixins para mantener cada módulo enfocado:
