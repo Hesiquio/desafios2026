@@ -34,13 +34,21 @@ class ActivitiesMixin:
                  font=self.f_title, bg=BG_MAIN, fg=TEXT_DARK).pack(anchor="w")
 
         # Lista de actividades con scroll
-        canvas = tk.Canvas(body, bg=BG_MAIN, highlightthickness=0)
-        scrollbar = tk.Scrollbar(body, command=canvas.yview)
+        canvas_wrap = tk.Frame(body, bg=BG_MAIN)
+        canvas_wrap.pack(fill="both", expand=True)
+
+        canvas = tk.Canvas(canvas_wrap, bg=BG_MAIN, highlightthickness=0)
+        scrollbar = tk.Scrollbar(canvas_wrap, command=canvas.yview)
         sf = tk.Frame(canvas, bg=BG_MAIN)
 
         sf.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=sf, anchor="nw")
+        # Hacer que el frame interno use todo el ancho del canvas
+        canvas_window = canvas.create_window((0, 0), window=sf, anchor="nw")
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(canvas_window, width=e.width))
+
         canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
 
         try:
             activities = self.db.get_activities()
@@ -76,9 +84,6 @@ class ActivitiesMixin:
                 self._make_btn(btn_frame, "✏️", 
                                lambda a=aid, n=name: self._edit_activity_dialog(a, n),
                                color="#4361EE", px=8, py=5, font=self.f_small).pack(side="left", padx=2)
-
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
 
         self._make_btn(body, "← Volver al Menú", self.show_main_menu,
                        color="#6C757D", hover="#495057", px=20, py=8, font=self.f_body).pack(pady=10)
@@ -137,6 +142,7 @@ class ActivitiesMixin:
             tk.Label(body, text="Error: No se pudo cargar el grupo.", fg="#EF233C").pack()
             return
 
+        # Botones de navegación arriba
         bf = tk.Frame(body, bg=BG_MAIN, pady=10)
         bf.pack(fill="x")
         self._make_btn(bf, "← Volver a Actividades", self.show_activities_menu,
@@ -146,7 +152,7 @@ class ActivitiesMixin:
 
         students_list = group_data['students']
         tk.Label(body, text=f"Grupo: {group_data['name']} | Haz clic para marcar entrega:",
-                 font=self.f_body, bg=BG_MAIN, fg=TEXT_DARK).pack(pady=(10, 15))
+                 font=self.f_body, bg=BG_MAIN, fg=TEXT_DARK).pack(pady=(10, 15), fill="x")
 
         canvas_wrap = tk.Frame(body, bg=BG_MAIN)
         canvas_wrap.pack(fill="both", expand=True)
@@ -156,14 +162,17 @@ class ActivitiesMixin:
         grid_frame = tk.Frame(canvas, bg=BG_MAIN)
 
         grid_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=grid_frame, anchor="nw")
+        canvas_window = canvas.create_window((0, 0), window=grid_frame, anchor="nw")
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(canvas_window, width=e.width))
+
         canvas.configure(yscrollcommand=scrollbar.set)
-        
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
         already_submitted = [r[0] for r in self.db.get_activity_ranking(activity_id)]
 
+        # Determinar columnas según ancho
+        cols = 4 # Más columnas para aprovechar el ancho
         for i, student in enumerate(sorted(students_list)):
             is_done = student in already_submitted
             btn_color = "#6C757D" if is_done else BTN_PRIMARY
@@ -173,9 +182,9 @@ class ActivitiesMixin:
             btn.config(command=lambda b=btn, s=student: self._mark_submission(activity_id, s, b))
             if is_done: btn.config(state="disabled")
             
-            btn.grid(row=i // 3, column=i % 3, sticky="nsew", padx=5, pady=5)
+            btn.grid(row=i // cols, column=i % cols, sticky="nsew", padx=5, pady=5)
         
-        for j in range(3): grid_frame.columnconfigure(j, weight=1)
+        for j in range(cols): grid_frame.columnconfigure(j, weight=1)
 
     def _mark_submission(self, activity_id, student_name, button):
         pos = self.db.register_submission(activity_id, student_name)
@@ -208,7 +217,6 @@ class ActivitiesMixin:
             tk.Label(body, text="Aún no hay entregas registradas.",
                      font=self.f_body, bg=BG_MAIN, fg=TEXT_MUTED).pack(pady=20)
         else:
-            # Contenedor con Scroll
             canvas_wrap = tk.Frame(body, bg=BG_MAIN)
             canvas_wrap.pack(fill="both", expand=True)
 
@@ -217,16 +225,17 @@ class ActivitiesMixin:
             sf_ranking = tk.Frame(canvas, bg=BG_MAIN)
 
             sf_ranking.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-            canvas.create_window((0, 0), window=sf_ranking, anchor="nw")
+            canvas_window = canvas.create_window((0, 0), window=sf_ranking, anchor="nw")
+            canvas.bind("<Configure>", lambda e: canvas.itemconfigure(canvas_window, width=e.width))
+
             canvas.configure(yscrollcommand=scrollbar.set)
-            
             canvas.pack(side="left", fill="both", expand=True)
             scrollbar.pack(side="right", fill="y")
 
             for student, pos, time, sid in ranking:
                 card = tk.Frame(sf_ranking, bg=BG_CARD, highlightbackground=BTN_PRIMARY if pos <= 3 else "#DEE2E6",
                                 highlightthickness=2 if pos <= 3 else 1, padx=15, pady=8)
-                card.pack(fill="x", pady=4)
+                card.pack(fill="x", pady=4, expand=True)
                 
                 medal = "🥇" if pos == 1 else "🥈" if pos == 2 else "🥉" if pos == 3 else f"#{pos}"
                 tk.Label(card, text=f"{medal}  {student}", font=self.f_name, bg=BG_CARD, fg=TEXT_DARK).pack(side="left")
@@ -240,10 +249,6 @@ class ActivitiesMixin:
                 self._make_btn(info_frame, "✏️", 
                                lambda s=sid, t=time, a=activity_id, n=activity_name: self._edit_submission_time_dialog(s, t, a, n),
                                color="#6C757D", px=5, py=2, font=self.f_small).pack(side="left")
-
-        btn_frame = tk.Frame(body, bg=BG_MAIN, pady=15)
-        btn_frame.pack()
-        self._make_btn(btn_frame, "← Volver", self.show_main_menu, color="#6C757D", px=20, py=10).pack()
 
     def _edit_activity_dialog(self, activity_id, current_name):
         new_name = simpledialog.askstring("Editar Actividad", "¿Nuevo nombre para la tarea?", initialvalue=current_name)
