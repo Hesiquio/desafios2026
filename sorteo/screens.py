@@ -89,6 +89,10 @@ class ScreensMixin:
                        self.show_config_screen,
                        color="#4361EE", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
 
+        self._make_btn(btn_frame, "🆕   Crear Nuevo Grupo",
+                       self.show_create_group_screen,
+                       color="#06D6A0", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
+
         self._make_btn(btn_frame, "📁   Cargar Grupo Guardado",
                        self.show_groups_list,
                        color="#06D6A0", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
@@ -433,6 +437,10 @@ class ScreensMixin:
 
         self._make_btn(btn_subrow, "🎲   INICIAR SORTEO", self._start_sorteo,
                        color=BTN_PRIMARY, px=30, py=14, font=self.f_btn).pack(side="left", padx=5)
+        
+        self._make_btn(btn_subrow, "💾   GUARDAR GRUPO", self._save_group_only,
+                       color="#06D6A0", px=20, py=14, font=self.f_btn).pack(side="left", padx=5)
+        
         self._make_btn(btn_subrow, "← Volver", self.show_main_menu,
                        color="#6C757D", hover="#495057", px=20, py=14,
                        font=self.f_btn).pack(side="left", padx=5)
@@ -506,3 +514,80 @@ class ScreensMixin:
         self.current_group_name = self.entry_group_name.get() or "Sorteo"
 
         self.show_sorteo_screen()
+
+    def _save_group_only(self):
+        """Valida y guarda el grupo en la BD sin iniciar el sorteo."""
+        names = self._parse_names()
+        try:
+            nt = int(self.entry_teams.get())
+        except ValueError:
+            self.lbl_error.config(text="⚠  Ingresa un número válido de equipos.")
+            return
+
+        if not names:
+            self.lbl_error.config(text="⚠  La lista de alumnos está vacía.")
+            return
+
+        group_name = self.entry_group_name.get() or "Grupo Guardado"
+        # Guardar con equipos vacíos ya que no ha habido sorteo
+        empty_teams = [[] for _ in range(nt)]
+        
+        gid = self.db.save_group(group_name, names, nt, empty_teams)
+        
+        if gid:
+            messagebox.showinfo("Éxito", f"Grupo '{group_name}' guardado correctamente.")
+            self.show_main_menu()
+        else:
+            self.lbl_error.config(text="⚠  Error al guardar en la base de datos.")
+
+    def show_create_group_screen(self):
+        """Pantalla dedicada solo a la creación y guardado de grupos."""
+        self._clear()
+
+        hdr = tk.Frame(self.container, bg=BG_HEADER, pady=18)
+        hdr.pack(fill="x")
+        tk.Label(hdr, text="🆕  CREAR NUEVO GRUPO",
+                 font=self.f_header, bg=BG_HEADER, fg=TEXT_LIGHT).pack()
+
+        body = tk.Frame(self.container, bg=BG_MAIN, padx=40, pady=28)
+        body.pack(fill="both", expand=True)
+        body.columnconfigure(0, weight=1)
+        body.rowconfigure(1, weight=1)
+
+        self._labeled_section(body, "📋  Nombres de los Alumnos (uno por línea):", 0, 0)
+
+        txt_wrap = tk.Frame(body, bg=BG_CARD, highlightbackground="#CED4DA", highlightthickness=1)
+        txt_wrap.grid(row=1, column=0, sticky="nsew", pady=(0, 20))
+
+        sb = tk.Scrollbar(txt_wrap)
+        sb.pack(side="right", fill="y")
+        self.txt_students = tk.Text(txt_wrap, yscrollcommand=sb.set, font=self.f_body, 
+                                   bg=BG_CARD, relief="flat", bd=10)
+        self.txt_students.pack(fill="both", expand=True)
+        sb.config(command=self.txt_students.yview)
+
+        # Configuración rápida
+        form_frame = tk.Frame(body, bg=BG_MAIN)
+        form_frame.grid(row=2, column=0, sticky="ew")
+
+        tk.Label(form_frame, text="Nombre del Grupo:", font=self.f_body, bg=BG_MAIN).pack(side="left")
+        self.entry_group_name = tk.Entry(form_frame, font=self.f_body, width=20)
+        self.entry_group_name.insert(0, "Mi Nuevo Grupo")
+        self.entry_group_name.pack(side="left", padx=10)
+
+        tk.Label(form_frame, text="Equipos:", font=self.f_body, bg=BG_MAIN).pack(side="left", padx=(20, 0))
+        self.entry_teams = tk.Entry(form_frame, font=self.f_body, width=5, justify="center")
+        self.entry_teams.insert(0, "2")
+        self.entry_teams.pack(side="left", padx=10)
+
+        self.lbl_error = tk.Label(body, text="", font=self.f_small, bg=BG_MAIN, fg="#EF233C")
+        self.lbl_error.grid(row=3, column=0, pady=10)
+
+        btn_row = tk.Frame(body, bg=BG_MAIN)
+        btn_row.grid(row=4, column=0)
+        
+        self._make_btn(btn_row, "💾  GUARDAR GRUPO", self._save_group_only,
+                       color="#06D6A0", px=30, py=12).pack(side="left", padx=10)
+        
+        self._make_btn(btn_row, "← Cancelar", self.show_main_menu,
+                       color="#6C757D", px=30, py=12).pack(side="left", padx=10)
