@@ -30,6 +30,7 @@ class SorteoApp(ScreensMixin, SorteoScreenMixin, WheelMixin, ActivitiesMixin, tk
         self.minsize(850, 620)
         self.configure(bg=BG_MAIN)
         self.resizable(True, True)
+        self.state('zoomed')  # Iniciar maximizado en Windows
 
         # ── Base de datos ─────────────────────────────────────────────────
         self.db = DatabaseManager()
