@@ -74,7 +74,13 @@ class SorteoScreenMixin:
             btn_zone, "🔮   REVELAR SIGUIENTE INTEGRANTE",
             self.reveal_next, color=BTN_REVEAL, hover=BTN_REVEAL_H, px=36, py=14,
         )
-        self.btn_reveal.pack()
+        self.btn_reveal.pack(side="left", expand=True, padx=(20, 5))
+
+        self.btn_cancel_sorteo = self._make_btn(
+            btn_zone, "🏠   Abandonar Sorteo",
+            self.show_main_menu, color="#6C757D", hover="#495057", px=20, py=14,
+        )
+        self.btn_cancel_sorteo.pack(side="left", expand=True, padx=(5, 20))
 
         # ── Grid de tarjetas de equipo ────────────────────────────────────
         grid_frame = tk.Frame(self.container, bg=BG_MAIN)

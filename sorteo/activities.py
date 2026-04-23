@@ -114,7 +114,8 @@ class ActivitiesMixin:
             win.destroy()
             self.show_activities_menu()
 
-        self._make_btn(win, "Crear Actividad", _confirm, color="#06D6A0").pack(pady=15)
+        self._make_btn(win, "Crear Actividad", _confirm, color="#06D6A0").pack(pady=5)
+        self._make_btn(win, "Cancelar", win.destroy, color="#6C757D").pack(pady=5)
 
     def show_submission_screen(self, activity_id, activity_name, group_id):
         """Pantalla para marcar entregas basada en los alumnos del grupo de la actividad."""
