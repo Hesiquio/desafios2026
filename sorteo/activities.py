@@ -1,6 +1,6 @@
 # =============================================================================
 #  sorteo/activities.py
-#  Control de entregas y ranking de actividades
+#  Control de entregas y ranking de actividades (Independiente del sorteo)
 # =============================================================================
 
 import tkinter as tk
@@ -33,7 +33,7 @@ class ActivitiesMixin:
         tk.Label(body, text="Actividades Recientes:",
                  font=self.f_title, bg=BG_MAIN, fg=TEXT_DARK).pack(anchor="w")
 
-        # Lista de actividades
+        # Lista de actividades con scroll
         canvas = tk.Canvas(body, bg=BG_MAIN, highlightthickness=0)
         scrollbar = tk.Scrollbar(body, command=canvas.yview)
         sf = tk.Frame(canvas, bg=BG_MAIN)
@@ -42,13 +42,16 @@ class ActivitiesMixin:
         canvas.create_window((0, 0), window=sf, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
 
-        activities = self.db.get_activities()
+        try:
+            activities = self.db.get_activities()
+        except Exception:
+            activities = [] # Manejar si la tabla está vacía o hay error de esquema inicial
 
         if not activities:
             tk.Label(sf, text="No hay actividades creadas.",
                      font=self.f_body, bg=BG_MAIN, fg=TEXT_MUTED).pack(pady=20)
         else:
-            for aid, name, created in activities:
+            for aid, name, created, gname, gid in activities:
                 card = tk.Frame(sf, bg=BG_CARD, highlightbackground="#DEE2E6",
                                 highlightthickness=1, padx=15, pady=10)
                 card.pack(fill="x", pady=5)
@@ -56,15 +59,18 @@ class ActivitiesMixin:
                 info = tk.Frame(card, bg=BG_CARD)
                 info.pack(side="left", fill="both", expand=True)
                 tk.Label(info, text=name, font=self.f_name, bg=BG_CARD, fg=TEXT_DARK).pack(anchor="w")
-                tk.Label(info, text=f"Iniciada: {created}", font=self.f_small, bg=BG_CARD, fg=TEXT_MUTED).pack(anchor="w")
+                tk.Label(info, text=f"Grupo: {gname}  |  Iniciada: {created}", 
+                         font=self.f_small, bg=BG_CARD, fg=TEXT_MUTED).pack(anchor="w")
 
                 btn_frame = tk.Frame(card, bg=BG_CARD)
                 btn_frame.pack(side="right")
                 
-                self._make_btn(btn_frame, "Registrar Entregas", lambda a=aid, n=name: self.show_submission_screen(a, n),
+                self._make_btn(btn_frame, "Registrar Entregas", 
+                               lambda a=aid, n=name, g=gid: self.show_submission_screen(a, n, g),
                                color=BTN_PRIMARY, px=10, py=5, font=self.f_small).pack(side="left", padx=2)
                 
-                self._make_btn(btn_frame, "Ver Ranking", lambda a=aid, n=name: self.show_activity_ranking(a, n),
+                self._make_btn(btn_frame, "Ver Ranking", 
+                               lambda a=aid, n=name: self.show_activity_ranking(a, n),
                                color="#FF9F1C", px=10, py=5, font=self.f_small).pack(side="left", padx=2)
 
         canvas.pack(side="left", fill="both", expand=True)
@@ -74,13 +80,44 @@ class ActivitiesMixin:
                        color="#6C757D", hover="#495057", px=20, py=8, font=self.f_body).pack(pady=10)
 
     def _create_activity_dialog(self):
-        name = simpledialog.askstring("Nueva Actividad", "¿Nombre de la tarea/actividad?")
-        if name:
-            aid = self.db.create_activity(name)
+        """Diálogo para crear actividad eligiendo un grupo."""
+        groups = self.db.get_groups()
+        if not groups:
+            messagebox.showwarning("Atención", "Primero debes crear o guardar al menos un grupo.")
+            return
+
+        name = simpledialog.askstring("Nueva Actividad", "¿Nombre de la tarea?")
+        if not name: return
+
+        # Crear ventana pequeña para elegir grupo
+        win = tk.Toplevel(self)
+        win.title("Seleccionar Grupo")
+        win.geometry("350x400")
+        win.configure(bg=BG_MAIN)
+        win.transient(self)
+        win.grab_set()
+
+        tk.Label(win, text="¿Para qué grupo es la actividad?", 
+                 font=self.f_title, bg=BG_MAIN, pady=10).pack()
+
+        lb = tk.Listbox(win, font=self.f_body, height=10)
+        lb.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        for gid, gname, date in groups:
+            lb.insert("end", f"{gname} ({date.split(' ')[0]})")
+
+        def _confirm():
+            sel = lb.curselection()
+            if not sel: return
+            group_id = groups[sel[0]][0]
+            self.db.create_activity(name, group_id)
+            win.destroy()
             self.show_activities_menu()
 
-    def show_submission_screen(self, activity_id, activity_name):
-        """Pantalla para marcar quién va entregando en tiempo real."""
+        self._make_btn(win, "Crear Actividad", _confirm, color="#06D6A0").pack(pady=15)
+
+    def show_submission_screen(self, activity_id, activity_name, group_id):
+        """Pantalla para marcar entregas basada en los alumnos del grupo de la actividad."""
         self._clear()
 
         hdr = tk.Frame(self.container, bg=BG_HEADER, pady=12)
@@ -91,48 +128,47 @@ class ActivitiesMixin:
         body = tk.Frame(self.container, bg=BG_MAIN, padx=30, pady=20)
         body.pack(fill="both", expand=True)
 
-        tk.Label(body, text="Haz clic en el nombre del alumno para marcar la entrega:",
+        # Cargar alumnos del grupo directamente de la BD
+        group_data = self.db.load_group(group_id)
+        if not group_data:
+            tk.Label(body, text="Error: No se pudo cargar el grupo.", fg="#EF233C").pack()
+            return
+
+        students_list = group_data['students']
+        
+        tk.Label(body, text=f"Grupo: {group_data['name']} | Haz clic para marcar entrega:",
                  font=self.f_body, bg=BG_MAIN, fg=TEXT_DARK).pack(pady=(0, 15))
 
-        # Usar la lista de alumnos actuales o cargar del leaderboard
-        recent_students = self.students if self.students else [s[0] for s in self.db.get_leaderboard(100)]
+        # Grid de botones
+        grid_frame = tk.Frame(body, bg=BG_MAIN)
+        grid_frame.pack(fill="both", expand=True)
         
-        if not recent_students:
-            tk.Label(body, text="No hay alumnos cargados. Inicia un sorteo primero.",
-                     font=self.f_body, bg=BG_MAIN, fg="#EF233C").pack()
-        else:
-            # Grid de botones de alumnos
-            grid_frame = tk.Frame(body, bg=BG_MAIN)
-            grid_frame.pack(fill="both", expand=True)
-            
-            # Obtener ya entregados para deshabilitar
-            already_submitted = [r[0] for r in self.db.get_activity_ranking(activity_id)]
+        already_submitted = [r[0] for r in self.db.get_activity_ranking(activity_id)]
 
-            for i, student in enumerate(sorted(recent_students)):
-                btn_color = "#6C757D" if student in already_submitted else BTN_PRIMARY
-                btn_text = f"✅ {student}" if student in already_submitted else student
-                
-                btn = self._make_btn(grid_frame, btn_text, None, color=btn_color)
-                btn.config(command=lambda b=btn, s=student: self._mark_submission(activity_id, s, b))
-                
-                if student in already_submitted:
-                    btn.config(state="disabled")
-                
-                btn.grid(row=i // 3, column=i % 3, sticky="nsew", padx=5, pady=5)
+        for i, student in enumerate(sorted(students_list)):
+            is_done = student in already_submitted
+            btn_color = "#6C757D" if is_done else BTN_PRIMARY
+            btn_text = f"✅ {student}" if is_done else student
             
-            for j in range(3): grid_frame.columnconfigure(j, weight=1)
-
-        self._make_btn(body, "Ver Ranking Actual", lambda: self.show_activity_ranking(activity_id, activity_name),
-                       color="#FF9F1C", px=20, py=10).pack(pady=10)
+            btn = self._make_btn(grid_frame, btn_text, None, color=btn_color)
+            btn.config(command=lambda b=btn, s=student: self._mark_submission(activity_id, s, b))
+            if is_done: btn.config(state="disabled")
+            
+            btn.grid(row=i // 3, column=i % 3, sticky="nsew", padx=5, pady=5)
         
-        self._make_btn(body, "← Volver", self.show_activities_menu,
-                       color="#6C757D", hover="#495057", px=20, py=8).pack()
+        for j in range(3): grid_frame.columnconfigure(j, weight=1)
+
+        bf = tk.Frame(body, bg=BG_MAIN, pady=10)
+        bf.pack()
+        self._make_btn(bf, "Ver Ranking Actual", lambda: self.show_activity_ranking(activity_id, activity_name),
+                       color="#FF9F1C", px=20, py=10).pack(side="left", padx=5)
+        self._make_btn(bf, "← Volver", self.show_activities_menu,
+                       color="#6C757D", px=20, py=10).pack(side="left", padx=5)
 
     def _mark_submission(self, activity_id, student_name, button):
         pos = self.db.register_submission(activity_id, student_name)
         if pos:
             button.config(text=f"✅ #{pos} {student_name}", state="disabled", bg="#6C757D")
-            # Opcional: Feedback visual de éxito
         else:
             messagebox.showinfo("Info", "Este alumno ya ha entregado.")
 
@@ -154,7 +190,6 @@ class ActivitiesMixin:
             tk.Label(body, text="Aún no hay entregas registradas.",
                      font=self.f_body, bg=BG_MAIN, fg=TEXT_MUTED).pack(pady=20)
         else:
-            # Tabla de ranking
             for student, pos, time in ranking:
                 card = tk.Frame(body, bg=BG_CARD, highlightbackground=BTN_PRIMARY if pos <= 3 else "#DEE2E6",
                                 highlightthickness=2 if pos <= 3 else 1, padx=15, pady=8)
@@ -166,9 +201,4 @@ class ActivitiesMixin:
 
         btn_frame = tk.Frame(body, bg=BG_MAIN, pady=15)
         btn_frame.pack()
-        
-        self._make_btn(btn_frame, "Continuar Registrando", lambda: self.show_submission_screen(activity_id, activity_name),
-                       color=BTN_PRIMARY, px=20, py=10).pack(side="left", padx=5)
-        
-        self._make_btn(btn_frame, "← Volver", self.show_activities_menu,
-                       color="#6C757D", px=20, py=10).pack(side="left", padx=5)
+        self._make_btn(btn_frame, "← Volver", self.show_activities_menu, color="#6C757D", px=20, py=10).pack()
