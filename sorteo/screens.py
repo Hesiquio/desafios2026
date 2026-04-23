@@ -1,0 +1,504 @@
+# =============================================================================
+#  sorteo/screens.py
+#  Pantallas: Menú principal, Configuración, Grupos, Historial, Leaderboard
+# =============================================================================
+
+import math
+import random
+import tkinter as tk
+from tkinter import messagebox
+
+from .constants import (
+    BG_MAIN, BG_CARD, BG_HEADER,
+    BTN_PRIMARY, BTN_HOVER, BTN_REVEAL, BTN_REVEAL_H,
+    TEXT_DARK, TEXT_LIGHT, TEXT_MUTED, ACCENT_GOLD,
+    TEAM_COLORS,
+)
+
+
+class ScreensMixin:
+    """
+    Mixin que agrupa las pantallas estáticas de la app:
+    menú principal, configuración, grupos guardados, historial y leaderboard.
+    Se mezcla en SorteoApp junto con AnimationMixin y WheelMixin.
+    """
+
+    # =========================================================================
+    #  UTILIDADES COMUNES
+    # =========================================================================
+
+    def _clear(self):
+        """Destruye todos los widgets del contenedor para cambiar de pantalla."""
+        for w in self.container.winfo_children():
+            w.destroy()
+
+    def _make_btn(self, parent, text, cmd, color=BTN_PRIMARY, hover=BTN_HOVER,
+                  px=24, py=12, font=None, width=None):
+        """
+        Crea un botón flat con efecto hover.
+        El hover se implementa con bind <Enter>/<Leave> porque tk.Button
+        no soporta :hover nativo.
+        """
+        f = font or self.f_btn
+        b = tk.Button(
+            parent, text=text, command=cmd,
+            bg=color, fg=TEXT_LIGHT, font=f,
+            relief="flat", bd=0,
+            activebackground=hover, activeforeground=TEXT_LIGHT,
+            cursor="hand2", padx=px, pady=py,
+        )
+        if width:
+            b.config(width=width)
+        b.bind("<Enter>", lambda e: b.config(bg=hover))
+        b.bind("<Leave>", lambda e: b.config(bg=color))
+        return b
+
+    def _labeled_section(self, parent, text, row, col, colspan=1, pady=(0, 8)):
+        """Crea un Label de sección con estilo uniforme."""
+        lbl = tk.Label(parent, text=text, font=self.f_title,
+                       bg=BG_MAIN, fg=TEXT_DARK, anchor="w")
+        lbl.grid(row=row, column=col, columnspan=colspan,
+                 sticky="w", pady=pady)
+        return lbl
+
+    # =========================================================================
+    #  PANTALLA 0 — MENÚ PRINCIPAL
+    # =========================================================================
+
+    def show_main_menu(self):
+        """Pantalla inicial con opciones de navegación."""
+        self._clear()
+
+        hdr = tk.Frame(self.container, bg=BG_HEADER, pady=20)
+        hdr.pack(fill="x")
+        tk.Label(hdr, text="⚽  GESTOR DE SORTEOS",
+                 font=self.f_header, bg=BG_HEADER, fg=TEXT_LIGHT).pack()
+        tk.Label(hdr, text="Champions League + Ruleta de Puntos",
+                 font=self.f_small, bg=BG_HEADER, fg=TEXT_MUTED).pack(pady=(3, 0))
+
+        body = tk.Frame(self.container, bg=BG_MAIN, padx=40, pady=30)
+        body.pack(fill="both", expand=True)
+
+        tk.Label(body, text="¿Qué deseas hacer?",
+                 font=self.f_title, bg=BG_MAIN, fg=TEXT_DARK).pack(pady=(0, 30))
+
+        btn_frame = tk.Frame(body, bg=BG_MAIN)
+        btn_frame.pack(fill="both")
+
+        self._make_btn(btn_frame, "🎲   Nuevo Sorteo",
+                       self.show_config_screen,
+                       color="#4361EE", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
+
+        self._make_btn(btn_frame, "📁   Cargar Grupo Guardado",
+                       self.show_groups_list,
+                       color="#06D6A0", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
+
+        self._make_btn(btn_frame, "🎡   Ruleta de Puntos",
+                       self.show_wheel_screen,
+                       color="#F72585", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
+
+        self._make_btn(btn_frame, "📊   Ver Historial de Sorteos",
+                       self.show_history,
+                       color="#FF9F1C", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
+
+        self._make_btn(btn_frame, "🏆   Ver Leaderboard",
+                       self.show_leaderboard,
+                       color="#FFD60A", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
+
+        self._make_btn(btn_frame, "❌   Salir",
+                       self.quit,
+                       color="#6C757D", hover="#495057", px=40, py=16,
+                       font=self.f_title).pack(pady=10, fill="x")
+
+    # =========================================================================
+    #  PANTALLA — GRUPOS GUARDADOS
+    # =========================================================================
+
+    def show_groups_list(self):
+        """Muestra la lista de grupos guardados para cargar."""
+        self._clear()
+
+        hdr = tk.Frame(self.container, bg=BG_HEADER, pady=12)
+        hdr.pack(fill="x")
+        tk.Label(tk.Frame(hdr, bg=BG_HEADER), text="📁  Grupos Guardados",
+                 font=self.f_header, bg=BG_HEADER, fg=TEXT_LIGHT).pack()
+
+        body = tk.Frame(self.container, bg=BG_MAIN, padx=30, pady=20)
+        body.pack(fill="both", expand=True)
+
+        groups = self.db.get_groups()
+
+        if not groups:
+            tk.Label(body, text="No hay grupos guardados aún.",
+                     font=self.f_body, bg=BG_MAIN, fg=TEXT_MUTED).pack(pady=20)
+        else:
+            canvas = tk.Canvas(body, bg=BG_MAIN, highlightthickness=0)
+            scrollbar = tk.Scrollbar(body, command=canvas.yview)
+            sf = tk.Frame(canvas, bg=BG_MAIN)
+
+            sf.bind("<Configure>",
+                    lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+            canvas.create_window((0, 0), window=sf, anchor="nw")
+            canvas.configure(yscrollcommand=scrollbar.set)
+
+            for group_id, group_name, created_at in groups:
+                card = tk.Frame(sf, bg=BG_CARD,
+                                highlightbackground="#DEE2E6", highlightthickness=1,
+                                padx=15, pady=10)
+                card.pack(fill="x", pady=8)
+
+                info = tk.Frame(card, bg=BG_CARD)
+                info.pack(side="left", fill="both", expand=True)
+                tk.Label(info, text=group_name,
+                         font=self.f_name, bg=BG_CARD, fg=TEXT_DARK).pack(anchor="w")
+                tk.Label(info, text=f"Creado: {created_at}",
+                         font=self.f_small, bg=BG_CARD, fg=TEXT_MUTED).pack(anchor="w")
+
+                bc = tk.Frame(card, bg=BG_CARD)
+                bc.pack(side="right", padx=(10, 0))
+                self._make_btn(bc, "Cargar",
+                               lambda gid=group_id: self._load_and_sort(gid),
+                               color=BTN_PRIMARY, px=12, py=6,
+                               font=self.f_small).pack(side="left", padx=3)
+                self._make_btn(bc, "Eliminar",
+                               lambda gid=group_id: self._delete_group_confirm(gid),
+                               color="#EF233C", px=12, py=6,
+                               font=self.f_small).pack(side="left", padx=3)
+
+            canvas.pack(side="left", fill="both", expand=True)
+            scrollbar.pack(side="right", fill="y")
+
+        tk.Frame(body, height=0, bg=BG_MAIN).pack(pady=10)
+        self._make_btn(body, "← Volver", self.show_main_menu,
+                       color="#6C757D", hover="#495057", px=20, py=8,
+                       font=self.f_body).pack()
+
+    def _load_and_sort(self, group_id):
+        """Carga un grupo y va directamente al sorteo."""
+        data = self.db.load_group(group_id)
+        if data:
+            self.students = data['students'][:]
+            random.shuffle(self.students)
+            self.num_teams = data['num_teams']
+            self.teams = [[] for _ in range(self.num_teams)]
+            self.student_index = 0
+            self.assign_index = 0
+            self.is_animating = False
+            self.current_group_id = group_id
+            self.show_sorteo_screen()
+
+    def _delete_group_confirm(self, group_id):
+        """Confirma la eliminación de un grupo."""
+        if messagebox.askyesno("Confirmar", "¿Eliminar este grupo?"):
+            self.db.delete_group(group_id)
+            self.show_groups_list()
+
+    # =========================================================================
+    #  PANTALLA — HISTORIAL
+    # =========================================================================
+
+    def show_history(self):
+        """Muestra el historial de sorteos."""
+        self._clear()
+
+        hdr = tk.Frame(self.container, bg=BG_HEADER, pady=12)
+        hdr.pack(fill="x")
+        tk.Label(hdr, text="📊  Historial de Sorteos",
+                 font=self.f_header, bg=BG_HEADER, fg=TEXT_LIGHT).pack()
+
+        body = tk.Frame(self.container, bg=BG_MAIN, padx=30, pady=20)
+        body.pack(fill="both", expand=True)
+
+        history = self.db.get_draw_history()
+
+        if not history:
+            tk.Label(body, text="No hay sorteos registrados aún.",
+                     font=self.f_body, bg=BG_MAIN, fg=TEXT_MUTED).pack(pady=20)
+        else:
+            canvas = tk.Canvas(body, bg=BG_MAIN, highlightthickness=0)
+            scrollbar = tk.Scrollbar(body, command=canvas.yview)
+            sf = tk.Frame(canvas, bg=BG_MAIN)
+
+            sf.bind("<Configure>",
+                    lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+            canvas.create_window((0, 0), window=sf, anchor="nw")
+            canvas.configure(yscrollcommand=scrollbar.set)
+
+            for idx, group_name, drawn_at, notes in history:
+                card = tk.Frame(sf, bg=BG_CARD,
+                                highlightbackground="#DEE2E6", highlightthickness=1,
+                                padx=15, pady=10)
+                card.pack(fill="x", pady=8)
+                tk.Label(card, text=group_name,
+                         font=self.f_name, bg=BG_CARD, fg=TEXT_DARK).pack(anchor="w")
+                tk.Label(card, text=f"Fecha: {drawn_at}",
+                         font=self.f_small, bg=BG_CARD, fg=TEXT_MUTED).pack(anchor="w")
+                if notes:
+                    tk.Label(card, text=f"Notas: {notes}",
+                             font=self.f_small, bg=BG_CARD, fg=TEXT_MUTED).pack(anchor="w")
+
+            canvas.pack(side="left", fill="both", expand=True)
+            scrollbar.pack(side="right", fill="y")
+
+        tk.Frame(body, height=0, bg=BG_MAIN).pack(pady=10)
+        self._make_btn(body, "← Volver", self.show_main_menu,
+                       color="#6C757D", hover="#495057", px=20, py=8,
+                       font=self.f_body).pack()
+
+    # =========================================================================
+    #  PANTALLA — LEADERBOARD
+    # =========================================================================
+
+    def show_leaderboard(self):
+        """Muestra el ranking de puntos de los estudiantes."""
+        self._clear()
+
+        hdr = tk.Frame(self.container, bg=BG_HEADER, pady=12)
+        hdr.pack(fill="x")
+        tk.Label(hdr, text="🏆  Leaderboard",
+                 font=self.f_header, bg=BG_HEADER, fg=ACCENT_GOLD).pack()
+
+        body = tk.Frame(self.container, bg=BG_MAIN, padx=30, pady=20)
+        body.pack(fill="both", expand=True)
+
+        leaderboard = self.db.get_leaderboard(30)
+
+        if not leaderboard:
+            tk.Label(body, text="No hay puntos registrados aún.",
+                     font=self.f_body, bg=BG_MAIN, fg=TEXT_MUTED).pack(pady=20)
+        else:
+            tk.Label(body, text="Top Estudiantes",
+                     font=self.f_title, bg=BG_MAIN, fg=TEXT_DARK).pack(pady=10)
+
+            canvas = tk.Canvas(body, bg=BG_MAIN, highlightthickness=0)
+            scrollbar = tk.Scrollbar(body, command=canvas.yview)
+            sf = tk.Frame(canvas, bg=BG_MAIN)
+
+            sf.bind("<Configure>",
+                    lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+            canvas.create_window((0, 0), window=sf, anchor="nw")
+            canvas.configure(yscrollcommand=scrollbar.set)
+
+            from tkinter import font as tkfont
+            for rank, (name, points, spins) in enumerate(leaderboard, 1):
+                card = tk.Frame(sf, bg=BG_CARD,
+                                highlightbackground=TEAM_COLORS[rank % len(TEAM_COLORS)],
+                                highlightthickness=2, padx=15, pady=10)
+                card.pack(fill="x", pady=6)
+
+                info = tk.Frame(card, bg=BG_CARD)
+                info.pack(side="left", fill="both", expand=True)
+                medals = ["🥇", "🥈", "🥉"]
+                medal = medals[rank - 1] if rank <= 3 else f"#{rank}"
+                tk.Label(info, text=f"{medal}  {name}",
+                         font=self.f_name, bg=BG_CARD, fg=TEXT_DARK).pack(anchor="w")
+                tk.Label(info, text=f"Vueltas: {spins}",
+                         font=self.f_small, bg=BG_CARD, fg=TEXT_MUTED).pack(anchor="w")
+                tk.Label(card, text=f"{points} pts",
+                         font=tkfont.Font(family="Helvetica", size=16, weight="bold"),
+                         bg=BG_CARD, fg=ACCENT_GOLD).pack(side="right")
+
+            canvas.pack(side="left", fill="both", expand=True)
+            scrollbar.pack(side="right", fill="y")
+
+        tk.Frame(body, height=0, bg=BG_MAIN).pack(pady=10)
+        bf = tk.Frame(body, bg=BG_MAIN)
+        bf.pack()
+        self._make_btn(bf, "Limpiar Leaderboard", self._reset_lb_confirm,
+                       color="#EF233C", px=20, py=8, font=self.f_body).pack(side="left", padx=5)
+        self._make_btn(bf, "← Volver", self.show_main_menu,
+                       color="#6C757D", hover="#495057", px=20, py=8,
+                       font=self.f_body).pack(side="left", padx=5)
+
+    def _reset_lb_confirm(self):
+        """Confirma el limpiar leaderboard."""
+        if messagebox.askyesno("Confirmar", "¿Limpiar todos los puntos?"):
+            self.db.reset_leaderboard()
+            self.show_leaderboard()
+
+    # =========================================================================
+    #  PANTALLA 1 — CONFIGURACIÓN
+    # =========================================================================
+
+    def show_config_screen(self):
+        """Construye y muestra la pantalla de configuración inicial."""
+        self._clear()
+
+        hdr = tk.Frame(self.container, bg=BG_HEADER, pady=18)
+        hdr.pack(fill="x")
+        tk.Label(hdr, text="⚽  Sorteo de Equipos",
+                 font=self.f_header, bg=BG_HEADER, fg=TEXT_LIGHT).pack()
+        tk.Label(hdr, text="Al estilo Champions League — ¡Que empiece el drama!",
+                 font=self.f_small, bg=BG_HEADER, fg=TEXT_MUTED).pack(pady=(3, 0))
+
+        body = tk.Frame(self.container, bg=BG_MAIN, padx=40, pady=28)
+        body.pack(fill="both", expand=True)
+        body.columnconfigure(0, weight=3)
+        body.columnconfigure(1, weight=1)
+        body.rowconfigure(1, weight=1)
+
+        # ── Panel izquierdo: área de texto ────────────────────────────────
+        self._labeled_section(body, "📋  Lista de Alumnos   (uno por línea):", 0, 0)
+
+        txt_wrap = tk.Frame(body, bg=BG_CARD,
+                            highlightbackground="#CED4DA", highlightthickness=1)
+        txt_wrap.grid(row=1, column=0, sticky="nsew", padx=(0, 18))
+
+        sb = tk.Scrollbar(txt_wrap)
+        sb.pack(side="right", fill="y")
+
+        self.txt_students = tk.Text(
+            txt_wrap, yscrollcommand=sb.set,
+            font=self.f_body, bg=BG_CARD, fg=TEXT_MUTED,
+            relief="flat", bd=10, wrap="word",
+            insertbackground=BTN_PRIMARY,
+        )
+        self.txt_students.pack(fill="both", expand=True)
+        sb.config(command=self.txt_students.yview)
+
+        _PH = (
+            "Escribe o pega los nombres aquí…\n\n"
+            "Ejemplo:\nAna García\nCarlos López\nMaría Pérez\n…"
+        )
+        self.txt_students.insert("1.0", _PH)
+
+        def _focus_in(e):
+            if self.txt_students.get("1.0", "end-1c") == _PH:
+                self.txt_students.delete("1.0", "end")
+                self.txt_students.config(fg=TEXT_DARK)
+
+        self.txt_students.bind("<FocusIn>", _focus_in)
+        self.txt_students.bind("<KeyRelease>", self._refresh_info)
+
+        # ── Panel derecho: configuración ──────────────────────────────────
+        right = tk.Frame(body, bg=BG_MAIN)
+        right.grid(row=0, column=1, rowspan=2, sticky="nsew")
+
+        card = tk.Frame(right, bg=BG_CARD, padx=22, pady=22,
+                        highlightbackground="#DEE2E6", highlightthickness=1)
+        card.pack(fill="x", pady=(30, 0))
+
+        tk.Label(card, text="⚙️  Configuración",
+                 font=self.f_title, bg=BG_CARD, fg=TEXT_DARK).pack(anchor="w")
+        tk.Frame(card, height=1, bg="#DEE2E6").pack(fill="x", pady=10)
+
+        tk.Label(card, text="Número de Equipos:",
+                 font=self.f_body, bg=BG_CARD, fg=TEXT_DARK).pack(anchor="w", pady=(8, 4))
+
+        vcmd = (self.register(lambda s: s.isdigit() or s == ""), "%P")
+        e_wrap = tk.Frame(card, bg=BG_CARD,
+                          highlightbackground=BTN_PRIMARY, highlightthickness=2)
+        e_wrap.pack(fill="x", pady=(0, 14))
+        self.entry_teams = tk.Entry(
+            e_wrap, font=self.f_title, bg=BG_CARD, fg=TEXT_DARK,
+            relief="flat", bd=8, justify="center",
+            insertbackground=BTN_PRIMARY, validate="key", validatecommand=vcmd,
+        )
+        self.entry_teams.insert(0, "2")
+        self.entry_teams.pack(fill="x")
+        self.entry_teams.bind("<KeyRelease>", self._refresh_info)
+
+        tk.Frame(card, height=1, bg="#DEE2E6").pack(fill="x", pady=4)
+
+        tk.Label(card, text="Nombre del Grupo (opcional):",
+                 font=self.f_body, bg=BG_CARD, fg=TEXT_DARK).pack(anchor="w", pady=(8, 4))
+        e_group = tk.Frame(card, bg=BG_CARD,
+                           highlightbackground=BTN_PRIMARY, highlightthickness=2)
+        e_group.pack(fill="x", pady=(0, 14))
+        self.entry_group_name = tk.Entry(
+            e_group, font=self.f_body, bg=BG_CARD, fg=TEXT_DARK,
+            relief="flat", bd=8, insertbackground=BTN_PRIMARY,
+        )
+        self.entry_group_name.insert(0, "Mi Grupo")
+        self.entry_group_name.pack(fill="x")
+
+        tk.Frame(card, height=1, bg="#DEE2E6").pack(fill="x", pady=4)
+
+        self.lbl_info = tk.Label(
+            card, text="Ingresa los alumnos →",
+            font=self.f_small, bg=BG_CARD, fg=TEXT_MUTED,
+            wraplength=160, justify="center",
+        )
+        self.lbl_info.pack(pady=12)
+
+        # ── Botón iniciar ─────────────────────────────────────────────────
+        btn_row = tk.Frame(body, bg=BG_MAIN)
+        btn_row.grid(row=2, column=0, columnspan=2, pady=(22, 0))
+        btn_subrow = tk.Frame(btn_row, bg=BG_MAIN)
+        btn_subrow.pack()
+
+        self._make_btn(btn_subrow, "🎲   INICIAR SORTEO", self._start_sorteo,
+                       color=BTN_PRIMARY, px=30, py=14, font=self.f_btn).pack(side="left", padx=5)
+        self._make_btn(btn_subrow, "← Volver", self.show_main_menu,
+                       color="#6C757D", hover="#495057", px=20, py=14,
+                       font=self.f_btn).pack(side="left", padx=5)
+
+        self.lbl_error = tk.Label(body, text="", font=self.f_small,
+                                  bg=BG_MAIN, fg="#EF233C")
+        self.lbl_error.grid(row=3, column=0, columnspan=2, pady=(8, 0))
+
+    # ── Helpers de configuración ──────────────────────────────────────────
+
+    def _refresh_info(self, _=None):
+        """Actualiza en tiempo real el resumen de alumnos/equipos."""
+        names = self._parse_names()
+        try:
+            nt = int(self.entry_teams.get())
+        except ValueError:
+            nt = 0
+
+        if names and nt >= 2:
+            lo = len(names) // nt
+            hi = math.ceil(len(names) / nt)
+            self.lbl_info.config(
+                text=f"✅  {len(names)} alumnos → {nt} equipos\n"
+                     f"(~{lo}–{hi} integrantes c/u)",
+                fg="#06D6A0",
+            )
+        else:
+            self.lbl_info.config(text="Ingresa los alumnos →", fg=TEXT_MUTED)
+
+    def _parse_names(self):
+        """Extrae la lista limpia de nombres del widget Text."""
+        raw = self.txt_students.get("1.0", "end-1c").strip()
+        bad = {
+            "Escribe o pega los nombres aquí…",
+            "Ejemplo:", "Ana García", "Carlos López", "María Pérez", "…",
+        }
+        return [line.strip() for line in raw.splitlines()
+                if line.strip() and line.strip() not in bad]
+
+    def _start_sorteo(self):
+        """Valida la entrada y, si pasa, arranca la pantalla de sorteo."""
+        names = self._parse_names()
+
+        try:
+            nt = int(self.entry_teams.get())
+        except ValueError:
+            self.lbl_error.config(text="⚠  Ingresa un número válido de equipos.")
+            return
+
+        if not names:
+            self.lbl_error.config(text="⚠  La lista de alumnos está vacía.")
+            return
+        if nt < 2:
+            self.lbl_error.config(text="⚠  Deben ser al menos 2 equipos.")
+            return
+        if nt > len(names):
+            self.lbl_error.config(text="⚠  Hay más equipos que alumnos.")
+            return
+        if nt > 8:
+            self.lbl_error.config(text="⚠  El máximo es 8 equipos.")
+            return
+
+        self.students = names[:]
+        random.shuffle(self.students)
+        self.num_teams = nt
+        self.teams = [[] for _ in range(nt)]
+        self.student_index = 0
+        self.assign_index = 0
+        self.is_animating = False
+        self.current_group_id = None
+        self.current_group_name = self.entry_group_name.get() or "Sorteo"
+
+        self.show_sorteo_screen()
