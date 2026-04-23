@@ -60,8 +60,10 @@ class DatabaseManager:
         c.execute('''
             CREATE TABLE IF NOT EXISTS activities (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER,
                 name TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(group_id) REFERENCES groups(id)
             )
         ''')
 
@@ -216,21 +218,26 @@ class DatabaseManager:
 
     # ── Actividades ───────────────────────────────────────────────────────────
 
-    def create_activity(self, name):
-        """Crea una nueva actividad."""
+    def create_activity(self, name, group_id):
+        """Crea una nueva actividad ligada a un grupo."""
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
-        c.execute('INSERT INTO activities (name) VALUES (?)', (name,))
+        c.execute('INSERT INTO activities (name, group_id) VALUES (?, ?)', (name, group_id))
         conn.commit()
         activity_id = c.lastrowid
         conn.close()
         return activity_id
 
     def get_activities(self):
-        """Retorna todas las actividades."""
+        """Retorna todas las actividades con información de su grupo."""
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
-        c.execute('SELECT id, name, created_at FROM activities ORDER BY created_at DESC')
+        c.execute('''
+            SELECT a.id, a.name, a.created_at, g.name, a.group_id
+            FROM activities a
+            JOIN groups g ON a.group_id = g.id
+            ORDER BY a.created_at DESC
+        ''')
         rows = c.fetchall()
         conn.close()
         return rows
