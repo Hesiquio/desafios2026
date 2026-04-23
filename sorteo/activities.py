@@ -232,23 +232,35 @@ class ActivitiesMixin:
             canvas.pack(side="left", fill="both", expand=True)
             scrollbar.pack(side="right", fill="y")
 
-            for student, pos, time, sid in ranking:
-                card = tk.Frame(sf_ranking, bg=BG_CARD, highlightbackground=BTN_PRIMARY if pos <= 3 else "#DEE2E6",
-                                highlightthickness=2 if pos <= 3 else 1, padx=15, pady=8)
-                card.pack(fill="x", pady=4, expand=True)
+            cols = 4 # Cuadrícula para ahorrar espacio
+            for i, (student, pos, time, sid) in enumerate(ranking):
+                is_podium = pos <= 3
+                card = tk.Frame(sf_ranking, bg=BG_CARD, 
+                                highlightbackground=ACCENT_GOLD if is_podium else "#DEE2E6",
+                                highlightthickness=2 if is_podium else 1, padx=10, pady=8)
+                card.grid(row=i // cols, column=i % cols, sticky="nsew", padx=5, pady=5)
                 
+                # Medalla o Posición
                 medal = "🥇" if pos == 1 else "🥈" if pos == 2 else "🥉" if pos == 3 else f"#{pos}"
-                tk.Label(card, text=f"{medal}  {student}", font=self.f_name, bg=BG_CARD, fg=TEXT_DARK).pack(side="left")
+                tk.Label(card, text=medal, font=self.f_title if is_podium else self.f_body, 
+                         bg=BG_CARD, fg=TEXT_DARK).pack()
                 
-                info_frame = tk.Frame(card, bg=BG_CARD)
-                info_frame.pack(side="right")
+                # Nombre
+                tk.Label(card, text=student, font=self.f_name if is_podium else self.f_body, 
+                         bg=BG_CARD, fg=TEXT_DARK, wraplength=150).pack()
                 
-                tk.Label(info_frame, text=f"Hora: {time.split(' ')[1] if ' ' in time else time}", 
-                         font=self.f_small, bg=BG_CARD, fg=TEXT_MUTED).pack(side="left", padx=5)
+                # Hora y Edición
+                info_row = tk.Frame(card, bg=BG_CARD)
+                info_row.pack(fill="x", pady=(5, 0))
                 
-                self._make_btn(info_frame, "✏️", 
+                tk.Label(info_row, text=time.split(' ')[1] if ' ' in time else time, 
+                         font=self.f_small, bg=BG_CARD, fg=TEXT_MUTED).pack(side="left", expand=True)
+                
+                self._make_btn(info_row, "✏️", 
                                lambda s=sid, t=time, a=activity_id, n=activity_name: self._edit_submission_time_dialog(s, t, a, n),
-                               color="#6C757D", px=5, py=2, font=self.f_small).pack(side="left")
+                               color="#6C757D", px=4, py=1, font=self.f_small).pack(side="right")
+            
+            for j in range(cols): sf_ranking.columnconfigure(j, weight=1)
 
     def _edit_activity_dialog(self, activity_id, current_name):
         new_name = simpledialog.askstring("Editar Actividad", "¿Nuevo nombre para la tarea?", initialvalue=current_name)

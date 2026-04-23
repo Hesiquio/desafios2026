@@ -559,18 +559,13 @@ class ScreensMixin:
     def _save_group_only(self):
         """Valida y guarda el grupo en la BD sin iniciar el sorteo."""
         names = self._parse_names()
-        try:
-            nt = int(self.entry_teams.get())
-        except ValueError:
-            self.lbl_error.config(text="⚠  Ingresa un número válido de equipos.")
-            return
-
         if not names:
             self.lbl_error.config(text="⚠  La lista de alumnos está vacía.")
             return
 
         group_name = self.entry_group_name.get() or "Grupo Guardado"
-        # Guardar con equipos vacíos ya que no ha habido sorteo
+        # Usar un valor por defecto de 2 equipos al guardar por primera vez
+        nt = 2
         empty_teams = [[] for _ in range(nt)]
         
         gid = self.db.save_group(group_name, names, nt, empty_teams)
@@ -612,14 +607,9 @@ class ScreensMixin:
         form_frame.grid(row=2, column=0, sticky="ew")
 
         tk.Label(form_frame, text="Nombre del Grupo:", font=self.f_body, bg=BG_MAIN).pack(side="left")
-        self.entry_group_name = tk.Entry(form_frame, font=self.f_body, width=20)
+        self.entry_group_name = tk.Entry(form_frame, font=self.f_body, width=30)
         self.entry_group_name.insert(0, "Mi Nuevo Grupo")
         self.entry_group_name.pack(side="left", padx=10)
-
-        tk.Label(form_frame, text="Equipos:", font=self.f_body, bg=BG_MAIN).pack(side="left", padx=(20, 0))
-        self.entry_teams = tk.Entry(form_frame, font=self.f_body, width=5, justify="center")
-        self.entry_teams.insert(0, "2")
-        self.entry_teams.pack(side="left", padx=10)
 
         self.lbl_error = tk.Label(body, text="", font=self.f_small, bg=BG_MAIN, fg="#EF233C")
         self.lbl_error.grid(row=3, column=0, pady=10)
