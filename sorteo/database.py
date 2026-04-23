@@ -67,6 +67,12 @@ class DatabaseManager:
             )
         ''')
 
+        # Migración: Añadir group_id si la tabla ya existía sin él
+        try:
+            c.execute('ALTER TABLE activities ADD COLUMN group_id INTEGER')
+        except sqlite3.OperationalError:
+            pass # Ya existe o la tabla es nueva y ya lo tiene
+
         # Tabla de entregas (registra el orden)
         c.execute('''
             CREATE TABLE IF NOT EXISTS activity_submissions (
