@@ -89,11 +89,7 @@ class ScreensMixin:
                        self.show_config_screen,
                        color="#4361EE", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
 
-        self._make_btn(btn_frame, "🆕   Crear Nuevo Grupo",
-                       self.show_create_group_screen,
-                       color="#06D6A0", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
-
-        self._make_btn(btn_frame, "📁   Cargar Grupo Guardado",
+        self._make_btn(btn_frame, "📁   Gestionar Grupos",
                        self.show_groups_list,
                        color="#06D6A0", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
 
@@ -123,16 +119,20 @@ class ScreensMixin:
     # =========================================================================
 
     def show_groups_list(self):
-        """Muestra la lista de grupos guardados para cargar."""
+        """Muestra la lista de grupos guardados para gestionar."""
         self._clear()
 
         hdr = tk.Frame(self.container, bg=BG_HEADER, pady=12)
         hdr.pack(fill="x")
-        tk.Label(tk.Frame(hdr, bg=BG_HEADER), text="📁  Grupos Guardados",
+        tk.Label(hdr, text="📁  GESTIONAR GRUPOS",
                  font=self.f_header, bg=BG_HEADER, fg=TEXT_LIGHT).pack()
 
         body = tk.Frame(self.container, bg=BG_MAIN, padx=30, pady=20)
         body.pack(fill="both", expand=True)
+
+        # Botón para crear nuevo grupo desde aquí
+        self._make_btn(body, "➕  Crear Nuevo Grupo", self.show_create_group_screen,
+                       color="#06D6A0", px=20, py=10).pack(pady=(0, 20))
 
         groups = self.db.get_groups()
 
@@ -478,9 +478,6 @@ class ScreensMixin:
 
         self._make_btn(btn_subrow, "🎲   INICIAR SORTEO", self._start_sorteo,
                        color=BTN_PRIMARY, px=30, py=14, font=self.f_btn).pack(side="left", padx=5)
-        
-        self._make_btn(btn_subrow, "💾   GUARDAR GRUPO", self._save_group_only,
-                       color="#06D6A0", px=20, py=14, font=self.f_btn).pack(side="left", padx=5)
         
         self._make_btn(btn_subrow, "← Volver", self.show_main_menu,
                        color="#6C757D", hover="#495057", px=20, py=14,
