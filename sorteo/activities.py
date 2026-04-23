@@ -135,14 +135,32 @@ class ActivitiesMixin:
             tk.Label(body, text="Error: No se pudo cargar el grupo.", fg="#EF233C").pack()
             return
 
-        students_list = group_data['students']
-        
-        tk.Label(body, text=f"Grupo: {group_data['name']} | Haz clic para marcar entrega:",
-                 font=self.f_body, bg=BG_MAIN, fg=TEXT_DARK).pack(pady=(0, 15))
+        # Botones de navegación arriba para visibilidad
+        bf = tk.Frame(body, bg=BG_MAIN, pady=10)
+        bf.pack(fill="x")
+        self._make_btn(bf, "← Volver a Actividades", self.show_activities_menu,
+                       color="#6C757D", px=15, py=8).pack(side="left", padx=5)
+        self._make_btn(bf, "🏆 Ver Ranking Actual", lambda: self.show_activity_ranking(activity_id, activity_name),
+                       color="#FF9F1C", px=15, py=8).pack(side="left", padx=5)
 
-        # Grid de botones
-        grid_frame = tk.Frame(body, bg=BG_MAIN)
-        grid_frame.pack(fill="both", expand=True)
+        students_list = group_data['students'] # <--- Restaurado
+        tk.Label(body, text=f"Grupo: {group_data['name']} | Haz clic para marcar entrega:",
+                 font=self.f_body, bg=BG_MAIN, fg=TEXT_DARK).pack(pady=(10, 15))
+
+        # Grid de botones (ahora con scroll por si son muchos alumnos)
+        canvas_wrap = tk.Frame(body, bg=BG_MAIN)
+        canvas_wrap.pack(fill="both", expand=True)
+
+        canvas = tk.Canvas(canvas_wrap, bg=BG_MAIN, highlightthickness=0)
+        scrollbar = tk.Scrollbar(canvas_wrap, command=canvas.yview)
+        grid_frame = tk.Frame(canvas, bg=BG_MAIN)
+
+        grid_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=grid_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
         
         already_submitted = [r[0] for r in self.db.get_activity_ranking(activity_id)]
 
@@ -158,13 +176,6 @@ class ActivitiesMixin:
             btn.grid(row=i // 3, column=i % 3, sticky="nsew", padx=5, pady=5)
         
         for j in range(3): grid_frame.columnconfigure(j, weight=1)
-
-        bf = tk.Frame(body, bg=BG_MAIN, pady=10)
-        bf.pack()
-        self._make_btn(bf, "Ver Ranking Actual", lambda: self.show_activity_ranking(activity_id, activity_name),
-                       color="#FF9F1C", px=20, py=10).pack(side="left", padx=5)
-        self._make_btn(bf, "← Volver", self.show_activities_menu,
-                       color="#6C757D", px=20, py=10).pack(side="left", padx=5)
 
     def _mark_submission(self, activity_id, student_name, button):
         pos = self.db.register_submission(activity_id, student_name)
