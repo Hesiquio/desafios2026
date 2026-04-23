@@ -5,6 +5,7 @@
 
 import math
 import random
+import json
 import tkinter as tk
 from tkinter import messagebox
 
@@ -392,7 +393,9 @@ class ScreensMixin:
         lb.pack(fill="both", expand=True, padx=20, pady=10)
         
         for gid, gname, date in groups:
-            lb.insert("end", f"{gname} ({len(json.loads(self.db.load_group(gid)['students']))} alumnos)")
+            # La base de datos ya devuelve 'students' como lista
+            num_alumnos = len(self.db.load_group(gid)['students'])
+            lb.insert("end", f"{gname} ({num_alumnos} alumnos)")
 
         def _confirm():
             sel = lb.curselection()
@@ -560,8 +563,8 @@ class ScreensMixin:
         self.student_index = 0
         self.assign_index = 0
         self.is_animating = False
-        self.current_group_id = None
-        self.current_group_name = self.entry_group_name.get() or "Sorteo"
+        # Mantener el ID del grupo actual para el historial
+        # self.current_group_id ya está configurado en show_config_screen
 
         self.show_sorteo_screen()
 
