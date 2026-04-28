@@ -173,10 +173,18 @@ class WheelMixin:
                          ).grid(row=row, column=col, padx=4, pady=4)
 
         tk.Frame(body, height=0, bg=BG_MAIN).pack(pady=10)
-        self._make_btn(body, "← Volver al Menú",
+        footer_btns = tk.Frame(body, bg=BG_MAIN)
+        footer_btns.pack()
+
+        self._make_btn(footer_btns, "🔄 Cambiar Grupo",
+                       self._pick_group_for_wheel,
+                       color="#4361EE", px=20, py=8,
+                       font=self.f_body).pack(side="left", padx=5)
+
+        self._make_btn(footer_btns, "← Volver al Menú",
                        self.show_main_menu,
                        color="#6C757D", hover="#495057", px=20, py=8,
-                       font=self.f_body).pack()
+                       font=self.f_body).pack(side="left", padx=5)
 
     def _show_wheel_from_sorteo(self):
         """Navega a la ruleta desde la pantalla de fin de sorteo."""

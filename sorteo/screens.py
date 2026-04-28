@@ -95,7 +95,7 @@ class ScreensMixin:
                        color="#06D6A0", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
 
         self._make_btn(btn_frame, "🎡   Ruleta de Puntos",
-                       self.show_wheel_screen,
+                       self._pick_group_for_wheel,
                        color="#F72585", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
 
         self._make_btn(btn_frame, "📋   Control de Actividades",
@@ -416,39 +416,69 @@ class ScreensMixin:
 
     def _pick_group_for_sorteo(self):
         """Muestra una lista rápida para elegir qué grupo sortear."""
+        self._pick_group_generic(
+            title="¿Qué grupo deseas sortear?",
+            btn_text="Siguiente →",
+            btn_color=BTN_PRIMARY,
+            callback=lambda gid: self.show_config_screen(gid)
+        )
+
+    def _pick_group_for_wheel(self):
+        """Muestra una lista rápida para elegir qué grupo usar en la ruleta."""
+        def _on_select(gid):
+            data = self.db.load_group(gid)
+            if data:
+                self.students = data['students'][:]
+                self.current_group_name = data['name']
+                self.current_group_id = gid
+                self.show_wheel_screen()
+
+        self._pick_group_generic(
+            title="¿Para qué grupo es la ruleta?",
+            btn_text="Abrir Ruleta →",
+            btn_color="#F72585",
+            callback=_on_select
+        )
+
+    def _pick_group_generic(self, title, btn_text, btn_color, callback):
+        """Ventana genérica de selección de grupo."""
         groups = self.db.get_groups()
         if not groups:
             if messagebox.askyesno("Sin Grupos", "No tienes grupos guardados. ¿Deseas ir a Gestionar Grupos para crear uno?"):
                 self.show_groups_list()
             return
 
-        # Ventana de selección rápida
         win = tk.Toplevel(self)
         win.title("Seleccionar Grupo")
-        win.geometry("400x500")
+        win.geometry("400x550")
         win.configure(bg=BG_MAIN)
         win.transient(self)
         win.grab_set()
 
-        tk.Label(win, text="¿Qué grupo deseas sortear?", 
-                 font=self.f_title, bg=BG_MAIN, pady=15).pack()
+        tk.Label(win, text=title, font=self.f_title, bg=BG_MAIN, pady=15).pack()
 
-        lb = tk.Listbox(win, font=self.f_body, height=12)
-        lb.pack(fill="both", expand=True, padx=20, pady=10)
+        lb_frame = tk.Frame(win, bg=BG_CARD)
+        lb_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        sb = tk.Scrollbar(lb_frame)
+        sb.pack(side="right", fill="y")
+        
+        lb = tk.Listbox(lb_frame, font=self.f_body, yscrollcommand=sb.set, relief="flat", bd=5)
+        lb.pack(fill="both", expand=True)
+        sb.config(command=lb.yview)
         
         for gid, gname, date in groups:
-            # La base de datos ya devuelve 'students' como lista
-            num_alumnos = len(self.db.load_group(gid)['students'])
-            lb.insert("end", f"{gname} ({num_alumnos} alumnos)")
+            num = len(self.db.load_group(gid)['students'])
+            lb.insert("end", f"{gname} ({num} alumnos)")
 
         def _confirm():
             sel = lb.curselection()
             if not sel: return
             group_id = groups[sel[0]][0]
             win.destroy()
-            self.show_config_screen(group_id)
+            callback(group_id)
 
-        self._make_btn(win, "Siguiente →", _confirm, color=BTN_PRIMARY).pack(pady=10)
+        self._make_btn(win, btn_text, _confirm, color=btn_color).pack(pady=10)
         self._make_btn(win, "Cancelar", win.destroy, color="#6C757D").pack(pady=5)
 
     def show_config_screen(self, group_id):
