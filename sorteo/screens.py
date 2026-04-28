@@ -299,7 +299,7 @@ class ScreensMixin:
     #  PANTALLA — LEADERBOARD
     # =========================================================================
 
-    def show_leaderboard(self):
+    def show_leaderboard(self, group_id=None):
         """Muestra el ranking de puntos de los estudiantes."""
         self._clear()
 
@@ -311,13 +311,57 @@ class ScreensMixin:
         body = tk.Frame(self.container, bg=BG_MAIN, padx=30, pady=20)
         body.pack(fill="both", expand=True)
 
-        leaderboard = self.db.get_leaderboard(30)
+        # Selector de grupo
+        filter_frame = tk.Frame(body, bg=BG_MAIN)
+        filter_frame.pack(fill="x", pady=(0, 20))
+        
+        tk.Label(filter_frame, text="Filtrar por Grupo:", font=self.f_body, 
+                 bg=BG_MAIN, fg=TEXT_DARK).pack(side="left", padx=(0, 10))
+        
+        groups = self.db.get_groups()
+        group_options = ["Todos (Global)"] + [g[1] for g in groups]
+        
+        current_selection = tk.StringVar()
+        
+        # Determinar selección inicial
+        if group_id:
+            data = self.db.load_group(group_id)
+            initial = data['name'] if data else group_options[0]
+        elif hasattr(self, 'current_group_id') and self.current_group_id:
+            data = self.db.load_group(self.current_group_id)
+            initial = data['name'] if data else group_options[0]
+        else:
+            initial = group_options[0]
+            
+        current_selection.set(initial)
+        
+        def _on_group_change(val):
+            if val == "Todos (Global)":
+                self.show_leaderboard(None)
+            else:
+                # Buscar ID por nombre
+                gid = next((g[0] for g in groups if g[1] == val), None)
+                self.show_leaderboard(gid)
+
+        om = tk.OptionMenu(filter_frame, current_selection, *group_options, command=_on_group_change)
+        om.config(font=self.f_body, bg=BG_CARD, relief="flat", highlightthickness=0)
+        om.pack(side="left")
+
+        # Cargar datos según filtro
+        if initial == "Todos (Global)":
+            leaderboard = self.db.get_leaderboard(50)
+            title_suffix = "Global"
+        else:
+            gid = next((g[0] for g in groups if g[1] == initial), None)
+            data = self.db.load_group(gid)
+            leaderboard = self.db.get_group_leaderboard(data['students'])
+            title_suffix = initial
 
         if not leaderboard:
-            tk.Label(body, text="No hay puntos registrados aún.",
+            tk.Label(body, text=f"No hay puntos registrados aún para {title_suffix}.",
                      font=self.f_body, bg=BG_MAIN, fg=TEXT_MUTED).pack(pady=20)
         else:
-            tk.Label(body, text="Top Estudiantes",
+            tk.Label(body, text=f"Top Estudiantes — {title_suffix}",
                      font=self.f_title, bg=BG_MAIN, fg=TEXT_DARK).pack(pady=10)
 
             canvas = tk.Canvas(body, bg=BG_MAIN, highlightthickness=0)

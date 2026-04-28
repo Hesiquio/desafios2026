@@ -224,6 +224,23 @@ class DatabaseManager:
         conn.close()
         return leaderboard
 
+    def get_group_leaderboard(self, student_names):
+        """Retorna el leaderboard filtrado por una lista de nombres."""
+        if not student_names:
+            return []
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        placeholders = ','.join(['?'] * len(student_names))
+        query = f'''
+            SELECT student_name, points, wheel_spins FROM leaderboard
+            WHERE student_name IN ({placeholders})
+            ORDER BY points DESC
+        '''
+        c.execute(query, student_names)
+        leaderboard = c.fetchall()
+        conn.close()
+        return leaderboard
+
     def reset_leaderboard(self):
         """Limpia el leaderboard."""
         conn = sqlite3.connect(self.db_path)
