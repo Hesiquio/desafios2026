@@ -104,7 +104,7 @@ class WheelMixin:
         elif all_students:
             self.student_listbox.select_set(0)
 
-        # ── Panel derecho: ruleta visual ──────────────────────────────────
+        # ── Panel derecho: tómbola de texto ───────────────────────────────
         right_panel = tk.Frame(body, bg=BG_MAIN)
         right_panel.pack(side="right", fill="both", expand=True)
 
@@ -112,33 +112,25 @@ class WheelMixin:
         tk.Label(right_panel, text=title_text,
                  font=self.f_title, bg=BG_MAIN, fg=TEXT_DARK).pack(pady=(0, 15))
 
-        self.wheel_canvas = tk.Canvas(
-            right_panel, width=300, height=300,
-            bg=BG_CARD, highlightbackground="#DEE2E6", highlightthickness=1,
-        )
-        self.wheel_canvas.pack(pady=(0, 20))
-        self._draw_wheel()
-
-        self.wheel_result_frame = tk.Frame(right_panel, bg=BG_MAIN)
-        self.wheel_result_frame.pack(fill="x", pady=10)
-
-        tk.Label(self.wheel_result_frame, text="Puntos obtenidos:",
-                 font=self.f_body, bg=BG_MAIN, fg=TEXT_DARK).pack()
+        # Marco para el "Slot" / Tómbola
+        slot_frame = tk.Frame(right_panel, bg="#212529", padx=40, pady=60,
+                              highlightbackground=ACCENT_GOLD, highlightthickness=3)
+        slot_frame.pack(pady=20, fill="x")
 
         result_text = "—"
         if hasattr(self, 'selected_student') and self.selected_student:
             result_text = self.selected_student
         
         self.wheel_result_lbl = tk.Label(
-            self.wheel_result_frame, text=result_text,
-            font=tkfont.Font(family="Helvetica", size=24, weight="bold"),
-            bg=BG_MAIN, fg=ACCENT_GOLD,
-            wraplength=400
+            slot_frame, text=result_text,
+            font=tkfont.Font(family="Helvetica", size=48, weight="bold"),
+            bg="#212529", fg=ACCENT_GOLD,
+            wraplength=500
         )
-        self.wheel_result_lbl.pack(pady=5)
+        self.wheel_result_lbl.pack()
 
         btn_frame = tk.Frame(right_panel, bg=BG_MAIN)
-        btn_frame.pack(fill="x", pady=10)
+        btn_frame.pack(fill="x", pady=20)
 
         btn_text = "🎡   GIRAR PARA ELEGIR ALUMNO" if self.wheel_mode == "student" else "💰   GIRAR PARA GANAR PUNTOS"
         self.btn_spin_wheel = self._make_btn(
@@ -195,123 +187,59 @@ class WheelMixin:
     # =========================================================================
 
     def _draw_wheel(self):
-        """Dibuja la ruleta estática con las secciones configuradas."""
-        canvas = self.wheel_canvas
-        canvas.delete("all")
-
-        cx, cy = 150, 150
-        radius = 120
-        if self.wheel_mode == "student":
-            sections = self.students[:]
-            if len(sections) > 12:
-                # Si hay muchos, tomar una muestra aleatoria que incluya al azar,
-                # pero para que sea "real", la ruleta debería tener a todos.
-                # Intentaremos dibujar hasta 16.
-                if len(sections) > 16:
-                    sections = random.sample(sections, 16)
-            colors = TEAM_COLORS
-        else:
-            sections = WHEEL_POINTS
-            colors = WHEEL_COLORS_P
-
-        section_angle = 360 / len(sections)
-        angle = 0
-        self.wheel_sections_data = []
-
-        for i, item in enumerate(sections):
-            color = colors[i % len(colors)]
-            angle_end = angle + section_angle
-
-            # Polígono aproximado de cada sector
-            x1 = cx + radius * 0.1 * math.cos(math.radians(angle))
-            y1 = cy + radius * 0.1 * math.sin(math.radians(angle))
-            x2 = cx + radius * math.cos(math.radians(angle))
-            y2 = cy + radius * math.sin(math.radians(angle))
-            x3 = cx + radius * math.cos(math.radians(angle_end))
-            y3 = cy + radius * math.sin(math.radians(angle_end))
-            x4 = cx + radius * 0.1 * math.cos(math.radians(angle_end))
-            y4 = cy + radius * 0.1 * math.sin(math.radians(angle_end))
-
-            canvas.create_polygon(
-                [x1, y1, x2, y2, x3, y3, x4, y4],
-                fill=color, outline="#FFFFFF", width=1,
-            )
-
-            text_angle = angle + section_angle / 2
-            text_x = cx + radius * 0.65 * math.cos(math.radians(text_angle))
-            text_y = cy + radius * 0.65 * math.sin(math.radians(text_angle))
-            
-            # Ajustar tamaño de fuente si hay muchos
-            fsize = 10 if len(sections) > 10 else 12
-            if self.wheel_mode == "student" and len(str(item)) > 8:
-                display_text = str(item)[:7] + ".."
-            else:
-                display_text = str(item)
-
-            canvas.create_text(
-                text_x, text_y, text=display_text,
-                font=tkfont.Font(family="Helvetica", size=fsize, weight="bold"),
-                fill=TEXT_LIGHT if self.wheel_mode == "student" else TEXT_DARK,
-                angle=-text_angle if len(sections) > 8 else 0
-            )
-
-            self.wheel_sections_data.append(item)
-            angle = angle_end
-
-        # Círculo central decorativo
-        canvas.create_oval(cx - 20, cy - 20, cx + 20, cy + 20,
-                           fill=BG_HEADER, outline=ACCENT_GOLD, width=3)
-        canvas.create_text(cx, cy, text="🎯",
-                           font=tkfont.Font(family="Helvetica", size=20))
+        """No se usa en este modo de tómbola de texto."""
+        pass
 
     def spin_wheel(self):
-        """Gira la ruleta según el modo actual."""
+        """Gira la tómbola según el modo actual."""
         if self.wheel_mode == "student":
             if not self.students:
                 messagebox.showwarning("Error", "No hay estudiantes en el grupo.")
                 return
             
+            # Preparar datos de tómbola
+            self.wheel_sections_data = self.students[:]
+            
             self.btn_spin_wheel.config(state="disabled", bg="#ADB5BD")
             winner = random.choice(self.students)
-            self._animate_wheel_spin(winner, 20)
+            self._animate_wheel_spin(winner, 30)
         else:
-            # Modo puntos: necesitamos tener un estudiante seleccionado
+            # Modo puntos
             selection = self.student_listbox.curselection()
             if not selection:
                 messagebox.showwarning("Advertencia", "Selecciona un estudiante primero.")
                 return
 
-            student = self.student_listbox.get(selection[0])
+            self.wheel_sections_data = WHEEL_POINTS
+            
             self.btn_spin_wheel.config(state="disabled", bg="#ADB5BD")
-
             points = random.choice(WHEEL_POINTS)
-            self._animate_wheel_spin(points, 20)
+            self._animate_wheel_spin(points, 30)
 
     def _animate_wheel_spin(self, final_result, frame):
-        """Anima el giro de la ruleta."""
+        """Anima el cambio de nombres/puntos tipo tómbola."""
         if frame > 0:
             # Mostrar valores aleatorios durante el giro
             random_val = random.choice(self.wheel_sections_data)
-            self.wheel_result_lbl.config(text=str(random_val), fg=SLOT_TEXT)
+            self.wheel_result_lbl.config(text=str(random_val), fg=ACCENT_GOLD)
             
-            delay = int(30 + (20 - frame) * 5)
+            # Frenado progresivo
+            delay = int(20 + (30 - frame) ** 1.5)
             self.after(delay, self._animate_wheel_spin, final_result, frame - 1)
         else:
-            # Resultado final
-            self.wheel_result_lbl.config(text=str(final_result), fg=ACCENT_GOLD)
+            # Resultado final con efecto de parpadeo
+            self.wheel_result_lbl.config(text=str(final_result), fg="#00FF00") # Verde para el ganador
             
             if self.wheel_mode == "student":
                 self.selected_student = final_result
-                # Cambiar a modo puntos después de un breve delay
-                self.after(1500, lambda: self.show_wheel_screen(mode="points"))
+                self.after(2000, lambda: self.show_wheel_screen(mode="points"))
             else:
-                # Estamos en modo puntos, asignar al estudiante seleccionado
                 selection = self.student_listbox.curselection()
                 student = self.student_listbox.get(selection[0])
-                
                 self.db.add_points(student, final_result)
                 
-                # Feedback visual y reset
-                messagebox.showinfo("¡Puntos!", f"¡{student} ha ganado {final_result} puntos!")
-                self.selected_student = None
-                self.show_wheel_screen(mode="student")
+                self.after(1000, lambda: (
+                    messagebox.showinfo("¡Puntos!", f"¡{student} ha ganado {final_result} puntos!"),
+                    setattr(self, 'selected_student', None),
+                    self.show_wheel_screen(mode="student")
+                ))
