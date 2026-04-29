@@ -16,27 +16,17 @@ from .constants import (
     SLOT_TEXT, TEAM_COLORS,
 )
 
-# Valores y colores de las secciones de la ruleta (Puntos)
-WHEEL_POINTS   = [10, 20, 50, 100, 150, 200, 50, 10]
-WHEEL_COLORS_P = ["#FFADAD", "#FFD6A5", "#FDFFB6", "#CAFFBF", "#9BF6FF", "#A0C4FF", "#BDB2FF", "#FFC6FF"]
+
 
 
 class WheelMixin:
     """Mixin con la pantalla y la animación de la ruleta de puntos."""
 
-    # =========================================================================
-    #  PANTALLA 3 — RULETA DE PUNTOS
-    # =========================================================================
-
-    def show_wheel_screen(self, mode="student"):
+    def show_wheel_screen(self):
         """
-        Muestra la pantalla de la ruleta.
-        modos: "student" (seleccionar quién) o "points" (cuánto gana)
+        Muestra la pantalla de la ruleta de selección de alumnos.
         """
-        if not hasattr(self, 'wheel_mode'):
-            self.wheel_mode = mode
-        else:
-            self.wheel_mode = mode
+        self.wheel_mode = "student"
 
         # Si no hay estudiantes cargados y estamos en modo student, intentar cargar el último grupo
         if not self.students and self.wheel_mode == "student":
@@ -108,8 +98,7 @@ class WheelMixin:
         right_panel = tk.Frame(body, bg=BG_MAIN)
         right_panel.pack(side="right", fill="both", expand=True)
 
-        title_text = "🎯 ¡Selecciona al Estudiante!" if self.wheel_mode == "student" else "💰 ¡Gira por los Puntos!"
-        tk.Label(right_panel, text=title_text,
+        tk.Label(right_panel, text="🎯 ¡Selecciona al Estudiante!",
                  font=self.f_title, bg=BG_MAIN, fg=TEXT_DARK).pack(pady=(0, 15))
 
         # Marco para el "Slot" / Tómbola
@@ -132,9 +121,8 @@ class WheelMixin:
         btn_frame = tk.Frame(right_panel, bg=BG_MAIN)
         btn_frame.pack(fill="x", pady=20)
 
-        btn_text = "🎡   GIRAR PARA ELEGIR ALUMNO" if self.wheel_mode == "student" else "💰   GIRAR PARA GANAR PUNTOS"
         self.btn_spin_wheel = self._make_btn(
-            btn_frame, btn_text,
+            btn_frame, "🎡   GIRAR PARA ELEGIR ALUMNO",
             self.spin_wheel, color=BTN_REVEAL, hover=BTN_REVEAL_H,
             px=40, py=14, font=self.f_btn,
         )
@@ -191,55 +179,80 @@ class WheelMixin:
         pass
 
     def spin_wheel(self):
-        """Gira la tómbola según el modo actual."""
-        if self.wheel_mode == "student":
-            if not self.students:
-                messagebox.showwarning("Error", "No hay estudiantes en el grupo.")
-                return
-            
-            # Preparar datos de tómbola
-            self.wheel_sections_data = self.students[:]
-            
-            self.btn_spin_wheel.config(state="disabled", bg="#ADB5BD")
-            winner = random.choice(self.students)
-            self._animate_wheel_spin(winner, 30)
-        else:
-            # Modo puntos
-            selection = self.student_listbox.curselection()
-            if not selection:
-                messagebox.showwarning("Advertencia", "Selecciona un estudiante primero.")
-                return
+        """Gira la tómbola para elegir un alumno."""
+        if not self.students:
+            messagebox.showwarning("Error", "No hay estudiantes en el grupo.")
+            return
+        
+        # Preparar datos de tómbola
+        self.wheel_sections_data = self.students[:]
+        
+        self.btn_spin_wheel.config(state="disabled", bg="#ADB5BD")
+        winner = random.choice(self.students)
+        self._animate_wheel_spin(winner, 30)
 
-            self.wheel_sections_data = WHEEL_POINTS
-            
-            self.btn_spin_wheel.config(state="disabled", bg="#ADB5BD")
-            points = random.choice(WHEEL_POINTS)
-            self._animate_wheel_spin(points, 30)
+    def _show_point_assignment_dialog(self, student):
+        """Muestra un cuadro flotante para asignar puntos manualmente."""
+        win = tk.Toplevel(self)
+        win.title(f"Puntos para {student}")
+        win.geometry("350x450")
+        win.configure(bg=BG_CARD)
+        win.transient(self)
+        win.grab_set()
+        
+        # Centrar en pantalla
+        win.update_idletasks()
+        w, h = 350, 450
+        x = self.winfo_x() + (self.winfo_width() // 2) - (w // 2)
+        y = self.winfo_y() + (self.winfo_height() // 2) - (h // 2)
+        win.geometry(f"+{x}+{y}")
+
+        tk.Label(win, text="⭐ ASIGNAR PUNTOS", font=self.f_header, bg=BG_CARD, fg=ACCENT_GOLD).pack(pady=20)
+        tk.Label(win, text=student, font=self.f_title, bg=BG_CARD, fg=TEXT_DARK).pack()
+        
+        # Cuadro de texto para puntos
+        entry_frame = tk.Frame(win, bg=BG_CARD, pady=20)
+        entry_frame.pack()
+        
+        points_var = tk.StringVar(value="1")
+        entry = tk.Entry(entry_frame, textvariable=points_var, font=self.f_header, width=5, justify="center",
+                         relief="flat", highlightthickness=2, highlightbackground=BTN_PRIMARY)
+        entry.pack(side="left", padx=10)
+        entry.focus_set()
+        entry.selection_range(0, "end")
+
+        # Botones rápidos
+        quick_frame = tk.Frame(win, bg=BG_CARD, pady=10)
+        quick_frame.pack()
+
+        options = [("+1", 1), ("-1", -1), ("+2", 2), ("-2", -2), ("+5", 5), ("-5", -5)]
+        for i, (text, val) in enumerate(options):
+            btn = tk.Button(quick_frame, text=text, font=self.f_body, width=5, bg=BG_MAIN,
+                            command=lambda v=val: points_var.set(str(int(points_var.get() or 0) + v)))
+            btn.grid(row=i//2, column=i%2, padx=5, pady=5)
+
+        def _confirm(event=None):
+            try:
+                pts = int(points_var.get())
+                self.db.add_points(student, pts)
+                win.destroy()
+                self.show_wheel_screen()
+                # Pequeño aviso visual
+                msg = f"{student}: {'+' if pts > 0 else ''}{pts} pts"
+                self.wheel_result_lbl.config(text=msg, fg="#00FF00" if pts >= 0 else "#FF4D4D")
+            except ValueError:
+                messagebox.showerror("Error", "Ingresa un número válido.")
+
+        win.bind("<Return>", _confirm)
+        self._make_btn(win, "Confirmar Puntos", _confirm, color=BTN_PRIMARY, px=30, py=10).pack(pady=20)
 
     def _animate_wheel_spin(self, final_result, frame):
-        """Anima el cambio de nombres/puntos tipo tómbola."""
+        """Anima el cambio de nombres tipo tómbola."""
         if frame > 0:
-            # Mostrar valores aleatorios durante el giro
             random_val = random.choice(self.wheel_sections_data)
             self.wheel_result_lbl.config(text=str(random_val), fg=ACCENT_GOLD)
-            
-            # Frenado progresivo
             delay = int(20 + (30 - frame) ** 1.5)
             self.after(delay, self._animate_wheel_spin, final_result, frame - 1)
         else:
-            # Resultado final con efecto de parpadeo
-            self.wheel_result_lbl.config(text=str(final_result), fg="#00FF00") # Verde para el ganador
-            
-            if self.wheel_mode == "student":
-                self.selected_student = final_result
-                self.after(2000, lambda: self.show_wheel_screen(mode="points"))
-            else:
-                selection = self.student_listbox.curselection()
-                student = self.student_listbox.get(selection[0])
-                self.db.add_points(student, final_result)
-                
-                self.after(1000, lambda: (
-                    messagebox.showinfo("¡Puntos!", f"¡{student} ha ganado {final_result} puntos!"),
-                    setattr(self, 'selected_student', None),
-                    self.show_wheel_screen(mode="student")
-                ))
+            self.wheel_result_lbl.config(text=str(final_result), fg="#00FF00")
+            self.after(1000, lambda: self._show_point_assignment_dialog(final_result))
