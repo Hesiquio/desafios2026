@@ -86,6 +86,19 @@ class DatabaseManager:
             )
         ''')
 
+        # Tabla de Log de Actividad (Global)
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS activity_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                group_id INTEGER,
+                group_name TEXT,
+                description TEXT NOT NULL,
+                details TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
         conn.commit()
         conn.close()
 
@@ -159,6 +172,17 @@ class DatabaseManager:
 
     # ── Historial ─────────────────────────────────────────────────────────────
 
+    def log_event(self, event_type, group_name, description, group_id=None, details=None):
+        """Registra un evento en el log global."""
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        c.execute('''
+            INSERT INTO activity_log (event_type, group_id, group_name, description, details, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (event_type, group_id, group_name, description, json.dumps(details), datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+        conn.commit()
+        conn.close()
+
     def save_draw_history(self, group_name, teams, notes="", group_id=None):
         """Guarda un sorteo en el historial."""
         conn = sqlite3.connect(self.db_path)
@@ -173,23 +197,27 @@ class DatabaseManager:
 
         conn.commit()
         conn.close()
+        
+        # Log del evento
+        self.log_event("sorteo", group_name, f"Sorteo de equipos realizado ({len(teams)} equipos)", group_id, {"teams": teams})
 
-    def get_draw_history(self, limit=50):
-        """Retorna el historial de sorteos."""
+    def get_global_log(self, limit=100):
+        """Retorna el historial unificado de eventos."""
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         c.execute('''
-            SELECT id, group_name, drawn_at, notes FROM draw_history
-            ORDER BY drawn_at DESC LIMIT ?
+            SELECT event_type, group_name, description, created_at, details 
+            FROM activity_log
+            ORDER BY created_at DESC LIMIT ?
         ''', (limit,))
-        history = c.fetchall()
+        logs = c.fetchall()
         conn.close()
-        return history
+        return logs
 
     # ── Leaderboard ───────────────────────────────────────────────────────────
 
-    def add_points(self, student_name, points):
-        """Agrega puntos a un estudiante."""
+    def add_points(self, student_name, points, group_id=None, group_name=None):
+        """Agrega puntos a un estudiante y lo registra en el log."""
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
 
@@ -211,6 +239,10 @@ class DatabaseManager:
 
         conn.commit()
         conn.close()
+        
+        # Log del evento
+        desc = f"{student_name} recibió {points} puntos"
+        self.log_event("puntos", group_name, desc, group_id, {"student": student_name, "points": points})
 
     def get_leaderboard(self, limit=20):
         """Retorna el leaderboard ordenado por puntos."""
@@ -251,8 +283,8 @@ class DatabaseManager:
 
     # ── Actividades ───────────────────────────────────────────────────────────
 
-    def create_activity(self, name, group_id):
-        """Crea una nueva actividad ligada a un grupo."""
+    def create_activity(self, name, group_id, group_name=None):
+        """Crea una nueva actividad ligada a un grupo y lo registra."""
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -260,6 +292,8 @@ class DatabaseManager:
         conn.commit()
         activity_id = c.lastrowid
         conn.close()
+        
+        self.log_event("actividad", group_name, f"Nueva actividad creada: {name}", group_id)
         return activity_id
 
     def get_activities(self):

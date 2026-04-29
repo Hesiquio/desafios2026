@@ -103,7 +103,7 @@ class ActivitiesMixin:
         """Crea una actividad directamente para el grupo actual."""
         name = simpledialog.askstring("Nueva Actividad", "¿Nombre de la tarea?")
         if name:
-            self.db.create_activity(name, group_id)
+            self.db.create_activity(name, group_id, group_name=getattr(self, 'current_group_name', None))
             self.show_activities_menu(group_id)
 
     def _create_activity_dialog(self):
@@ -136,7 +136,8 @@ class ActivitiesMixin:
             sel = lb.curselection()
             if not sel: return
             group_id = groups[sel[0]][0]
-            self.db.create_activity(name, group_id)
+            group_name = groups[sel[0]][1]
+            self.db.create_activity(name, group_id, group_name=group_name)
             win.destroy()
             self.show_activities_menu()
 

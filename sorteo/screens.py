@@ -5,9 +5,10 @@
 
 import math
 import random
+import csv
 import json
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 
 from .constants import (
     BG_MAIN, BG_CARD, BG_HEADER,
@@ -236,10 +237,18 @@ class ScreensMixin:
                        lambda: self.show_leaderboard(group_id),
                        color="#FFD60A", px=20, py=25, font=self.f_title).grid(row=1, column=1, sticky="nsew", padx=10, pady=10)
 
-        # Botón volver
-        tk.Frame(body, height=0, bg=BG_MAIN).pack(pady=10)
-        self._make_btn(body, "← Volver a Grupos", self.show_groups_list,
-                       color="#6C757D", px=20, py=10).pack()
+        # Botones inferiores
+        tk.Frame(body, height=10, bg=BG_MAIN).pack()
+        
+        btns_low = tk.Frame(body, bg=BG_MAIN)
+        btns_low.pack(fill="x")
+        
+        self._make_btn(btns_low, "📥  Descargar Reporte (CSV)", 
+                       lambda: self.show_export_screen(group_id),
+                       color="#3A0CA3", px=20, py=10, font=self.f_title).pack(pady=5)
+
+        self._make_btn(btns_low, "← Volver a Grupos", self.show_groups_list,
+                       color="#6C757D", px=20, py=8).pack(pady=5)
 
     def _load_and_sort(self, group_id):
         """Carga un grupo y va directamente al sorteo."""
@@ -297,54 +306,166 @@ class ScreensMixin:
         self._make_btn(win, "Cancelar", win.destroy, color="#6C757D").pack(pady=5)
 
     # =========================================================================
-    #  PANTALLA — HISTORIAL
+    #  PANTALLA — EXPORTACIÓN CSV
     # =========================================================================
 
-    def show_history(self):
-        """Muestra el historial de sorteos."""
+    def show_export_screen(self, group_id):
+        """Pantalla para elegir qué datos exportar a CSV."""
+        data = self.db.load_group(group_id)
+        if not data: return
+        
         self._clear()
-
         hdr = tk.Frame(self.container, bg=BG_HEADER, pady=12)
         hdr.pack(fill="x")
-        tk.Label(hdr, text="📊  Historial de Sorteos",
+        tk.Label(hdr, text=f"📥  EXPORTAR REPORTE: {data['name']}",
+                 font=self.f_header, bg=BG_HEADER, fg=TEXT_LIGHT).pack()
+
+        body = tk.Frame(self.container, bg=BG_MAIN, padx=40, pady=30)
+        body.pack(fill="both", expand=True)
+
+        tk.Label(body, text="Selecciona los datos que deseas incluir en el archivo:",
+                 font=self.f_title, bg=BG_MAIN, fg=TEXT_DARK).pack(pady=(0, 20))
+
+        options_frame = tk.Frame(body, bg=BG_CARD, padx=20, pady=20, relief="flat", bd=1)
+        options_frame.pack(fill="x")
+
+        # Variables para los checkboxes
+        include_points = tk.BooleanVar(value=True)
+        tk.Checkbutton(options_frame, text="Puntos de Tómbola / Participación", 
+                       variable=include_points, font=self.f_body, bg=BG_CARD, activebackground=BG_CARD).pack(anchor="w", pady=5)
+
+        activities = [a for a in self.db.get_activities() if a[4] == group_id]
+        activity_vars = []
+        
+        if activities:
+            tk.Label(options_frame, text="Actividades:", font=self.f_name, bg=BG_CARD).pack(anchor="w", pady=(10, 5))
+            for aid, name, _, _, _ in activities:
+                var = tk.BooleanVar(value=True)
+                tk.Checkbutton(options_frame, text=f"📋 {name}", variable=var, 
+                               font=self.f_body, bg=BG_CARD, activebackground=BG_CARD).pack(anchor="w", padx=20)
+                activity_vars.append((aid, name, var))
+
+        def _do_export():
+            selected_activities = [(aid, name) for aid, name, var in activity_vars if var.get()]
+            self._execute_csv_export(group_id, data['name'], data['students'], include_points.get(), selected_activities)
+
+        tk.Frame(body, height=20, bg=BG_MAIN).pack()
+        self._make_btn(body, "🚀 Generar y Guardar CSV", _do_export, color="#3A0CA3", px=40, py=15).pack()
+        self._make_btn(body, "Cancelar", lambda: self.show_group_dashboard(group_id), color="#6C757D", px=20, py=8).pack(pady=10)
+
+    def _execute_csv_export(self, group_id, group_name, students, points_enabled, selected_activities):
+        """Lógica de generación del archivo CSV."""
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("Archivos CSV", "*.csv")],
+            initialfile=f"Reporte_{group_name.replace(' ', '_')}.csv"
+        )
+        if not filepath: return
+
+        try:
+            # Obtener datos de puntos
+            points_data = {}
+            if points_enabled:
+                lb = self.db.get_group_leaderboard(students)
+                points_data = {name: pts for name, pts, _ in lb}
+
+            # Obtener datos de actividades
+            act_results = {} # {activity_name: {student_name: position}}
+            for aid, aname in selected_activities:
+                ranking = self.db.get_activity_ranking(aid)
+                act_results[aname] = {name: f"#{pos}" for name, pos, _, _ in ranking}
+
+            with open(filepath, mode='w', newline='', encoding='utf-8-sig') as f:
+                writer = csv.writer(f)
+                
+                # Cabecera
+                header = ["Estudiante"]
+                if points_enabled: header.append("Puntos Participación")
+                for _, aname in selected_activities:
+                    header.append(aname)
+                writer.writerow(header)
+
+                # Filas
+                for student in sorted(students):
+                    row = [student]
+                    if points_enabled:
+                        row.append(points_data.get(student, 0))
+                    for _, aname in selected_activities:
+                        row.append(act_results[aname].get(student, "—"))
+                    writer.writerow(row)
+
+            messagebox.showinfo("Éxito", f"Archivo guardado correctamente en:\n{filepath}")
+            self.show_group_dashboard(group_id)
+            
+            # Log del evento
+            self.db.log_event("registro", group_name, f"Reporte CSV exportado", group_id)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo guardar el archivo: {e}")
+
+    def show_history(self):
+        """Muestra el log global de actividad del ClassRoom Clash."""
+        self._clear()
+        
+        hdr = tk.Frame(self.container, bg=BG_HEADER, pady=12)
+        hdr.pack(fill="x")
+        tk.Label(hdr, text="📊  LOG GLOBAL DE ACTIVIDAD",
                  font=self.f_header, bg=BG_HEADER, fg=TEXT_LIGHT).pack()
 
         body = tk.Frame(self.container, bg=BG_MAIN, padx=30, pady=20)
         body.pack(fill="both", expand=True)
 
-        history = self.db.get_draw_history()
+        logs = self.db.get_global_log(100)
 
-        if not history:
-            tk.Label(body, text="No hay sorteos registrados aún.",
-                     font=self.f_body, bg=BG_MAIN, fg=TEXT_MUTED).pack(pady=20)
+        if not logs:
+            tk.Label(body, text="📢 ¡AÚN NO HAY ACTIVIDAD!", 
+                     font=self.f_title, bg=BG_MAIN, fg=ACCENT_GOLD).pack(pady=(50, 10))
+            tk.Label(body, text="Realiza sorteos, usa la tómbola o crea actividades\npara ver el historial aquí.",
+                     font=self.f_body, bg=BG_MAIN, fg=TEXT_MUTED, justify="center").pack()
         else:
             canvas = tk.Canvas(body, bg=BG_MAIN, highlightthickness=0)
             scrollbar = tk.Scrollbar(body, command=canvas.yview)
             sf = tk.Frame(canvas, bg=BG_MAIN)
 
-            sf.bind("<Configure>",
-                    lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-            canvas.create_window((0, 0), window=sf, anchor="nw")
-            canvas.configure(yscrollcommand=scrollbar.set)
+            sf.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+            canvas_window = canvas.create_window((0, 0), window=sf, anchor="nw")
+            canvas.bind("<Configure>", lambda e: canvas.itemconfigure(canvas_window, width=e.width))
 
-            for idx, group_name, drawn_at, notes in history:
-                card = tk.Frame(sf, bg=BG_CARD,
-                                highlightbackground="#DEE2E6", highlightthickness=1,
-                                padx=15, pady=10)
-                card.pack(fill="x", pady=8)
-                tk.Label(card, text=group_name,
-                         font=self.f_name, bg=BG_CARD, fg=TEXT_DARK).pack(anchor="w")
-                tk.Label(card, text=f"Fecha: {drawn_at}",
-                         font=self.f_small, bg=BG_CARD, fg=TEXT_MUTED).pack(anchor="w")
-                if notes:
-                    tk.Label(card, text=f"Notas: {notes}",
-                             font=self.f_small, bg=BG_CARD, fg=TEXT_MUTED).pack(anchor="w")
+            canvas.configure(yscrollcommand=scrollbar.set)
+            
+            # Iconos por tipo
+            icons = {
+                "sorteo": "🎲",
+                "puntos": "💰",
+                "actividad": "📋",
+                "registro": "📂"
+            }
+
+            for etype, gname, desc, time, details in logs:
+                card = tk.Frame(sf, bg=BG_CARD, highlightbackground="#DEE2E6", 
+                                highlightthickness=1, padx=15, pady=8)
+                card.pack(fill="x", pady=4)
+                
+                icon = icons.get(etype, "📝")
+                
+                top_row = tk.Frame(card, bg=BG_CARD)
+                top_row.pack(fill="x")
+                
+                tk.Label(top_row, text=f"{icon} {desc}", font=self.f_body, 
+                         bg=BG_CARD, fg=TEXT_DARK).pack(side="left")
+                
+                tk.Label(top_row, text=time, font=self.f_small, 
+                         bg=BG_CARD, fg=TEXT_MUTED).pack(side="right")
+                
+                if gname:
+                    tk.Label(card, text=f"Grupo: {gname}", font=self.f_small, 
+                             bg=BG_CARD, fg="#4361EE").pack(anchor="w", padx=(25, 0))
 
             canvas.pack(side="left", fill="both", expand=True)
             scrollbar.pack(side="right", fill="y")
 
         tk.Frame(body, height=0, bg=BG_MAIN).pack(pady=10)
-        self._make_btn(body, "← Volver", self.show_main_menu,
+        self._make_btn(body, "← Volver al Menú", self.show_main_menu,
                        color="#6C757D", hover="#495057", px=20, py=8,
                        font=self.f_body).pack()
 

@@ -235,7 +235,9 @@ class WheelMixin:
         def _confirm(event=None):
             try:
                 pts = int(points_var.get())
-                self.db.add_points(student, pts)
+                self.db.add_points(student, pts, 
+                                   group_id=getattr(self, 'current_group_id', None),
+                                   group_name=getattr(self, 'current_group_name', None))
                 win.destroy()
                 self.show_wheel_screen()
                 # Pequeño aviso visual
