@@ -10,6 +10,13 @@ import json
 import tkinter as tk
 from tkinter import messagebox, filedialog
 
+try:
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    EXCEL_AVAILABLE = True
+except ImportError:
+    EXCEL_AVAILABLE = False
+
 from .constants import (
     BG_MAIN, BG_CARD, BG_HEADER,
     BTN_PRIMARY, BTN_HOVER, BTN_REVEAL, BTN_REVEAL_H,
@@ -243,7 +250,7 @@ class ScreensMixin:
         btns_low = tk.Frame(body, bg=BG_MAIN)
         btns_low.pack(fill="x")
         
-        self._make_btn(btns_low, "📥  Descargar Reporte (CSV)", 
+        self._make_btn(btns_low, "📊  Descargar Reporte Excel", 
                        lambda: self.show_export_screen(group_id),
                        color="#3A0CA3", px=20, py=10, font=self.f_title).pack(pady=5)
 
@@ -310,26 +317,25 @@ class ScreensMixin:
     # =========================================================================
 
     def show_export_screen(self, group_id):
-        """Pantalla para elegir qué datos exportar a CSV."""
+        """Pantalla para elegir qué datos exportar."""
         data = self.db.load_group(group_id)
         if not data: return
         
         self._clear()
         hdr = tk.Frame(self.container, bg=BG_HEADER, pady=12)
         hdr.pack(fill="x")
-        tk.Label(hdr, text=f"📥  EXPORTAR REPORTE: {data['name']}",
+        tk.Label(hdr, text=f"📊  EXPORTAR REPORTE: {data['name']}",
                  font=self.f_header, bg=BG_HEADER, fg=TEXT_LIGHT).pack()
 
         body = tk.Frame(self.container, bg=BG_MAIN, padx=40, pady=30)
         body.pack(fill="both", expand=True)
 
-        tk.Label(body, text="Selecciona los datos que deseas incluir en el archivo:",
+        tk.Label(body, text="Selecciona los datos que deseas incluir en el reporte:",
                  font=self.f_title, bg=BG_MAIN, fg=TEXT_DARK).pack(pady=(0, 20))
 
         options_frame = tk.Frame(body, bg=BG_CARD, padx=20, pady=20, relief="flat", bd=1)
         options_frame.pack(fill="x")
 
-        # Variables para los checkboxes
         include_points = tk.BooleanVar(value=True)
         tk.Checkbutton(options_frame, text="Puntos de Tómbola / Participación", 
                        variable=include_points, font=self.f_body, bg=BG_CARD, activebackground=BG_CARD).pack(anchor="w", pady=5)
@@ -347,61 +353,89 @@ class ScreensMixin:
 
         def _do_export():
             selected_activities = [(aid, name) for aid, name, var in activity_vars if var.get()]
-            self._execute_csv_export(group_id, data['name'], data['students'], include_points.get(), selected_activities)
+            if EXCEL_AVAILABLE:
+                self._execute_excel_export(group_id, data['name'], data['students'], include_points.get(), selected_activities)
+            else:
+                self._execute_csv_export(group_id, data['name'], data['students'], include_points.get(), selected_activities)
 
         tk.Frame(body, height=20, bg=BG_MAIN).pack()
-        self._make_btn(body, "🚀 Generar y Guardar CSV", _do_export, color="#3A0CA3", px=40, py=15).pack()
+        btn_text = "🚀 Generar Reporte Excel" if EXCEL_AVAILABLE else "🚀 Generar Reporte CSV"
+        self._make_btn(body, btn_text, _do_export, color="#3A0CA3", px=40, py=15).pack()
         self._make_btn(body, "Cancelar", lambda: self.show_group_dashboard(group_id), color="#6C757D", px=20, py=8).pack(pady=10)
 
-    def _execute_csv_export(self, group_id, group_name, students, points_enabled, selected_activities):
-        """Lógica de generación del archivo CSV."""
+    def _execute_excel_export(self, group_id, group_name, students, points_enabled, selected_activities):
+        """Genera un archivo Excel (.xlsx) con estilos profesionales."""
         filepath = filedialog.asksaveasfilename(
-            defaultextension=".csv",
-            filetypes=[("Archivos CSV", "*.csv")],
-            initialfile=f"Reporte_{group_name.replace(' ', '_')}.csv"
+            defaultextension=".xlsx",
+            filetypes=[("Libro de Excel", "*.xlsx")],
+            initialfile=f"Reporte_{group_name.replace(' ', '_')}.xlsx"
         )
         if not filepath: return
 
         try:
-            # Obtener datos de puntos
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Reporte de Clase"
+
+            # Estilos
+            header_fill = PatternFill(start_color="3A0CA3", end_color="3A0CA3", fill_type="solid")
+            header_font = Font(color="FFFFFF", bold=True, size=12)
+            stripe_fill = PatternFill(start_color="F8F9FA", end_color="F8F9FA", fill_type="solid")
+            center_align = Alignment(horizontal="center", vertical="center")
+            border = Border(left=Side(style='thin'), right=Side(style='thin'), 
+                            top=Side(style='thin'), bottom=Side(style='thin'))
+
+            # Cabecera
+            headers = ["Estudiante"]
+            if points_enabled: headers.append("Puntos Participación")
+            for _, aname in selected_activities: headers.append(aname)
+            
+            ws.append(headers)
+            for cell in ws[1]:
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = center_align
+                cell.border = border
+
+            # Datos
             points_data = {}
             if points_enabled:
                 lb = self.db.get_group_leaderboard(students)
                 points_data = {name: pts for name, pts, _ in lb}
 
-            # Obtener datos de actividades
-            act_results = {} # {activity_name: {student_name: position}}
+            act_results = {}
             for aid, aname in selected_activities:
                 ranking = self.db.get_activity_ranking(aid)
                 act_results[aname] = {name: f"#{pos}" for name, pos, _, _ in ranking}
 
-            with open(filepath, mode='w', newline='', encoding='utf-8-sig') as f:
-                writer = csv.writer(f)
-                
-                # Cabecera
-                header = ["Estudiante"]
-                if points_enabled: header.append("Puntos Participación")
+            for row_idx, student in enumerate(sorted(students), 2):
+                row_data = [student]
+                if points_enabled: row_data.append(points_data.get(student, 0))
                 for _, aname in selected_activities:
-                    header.append(aname)
-                writer.writerow(header)
+                    row_data.append(act_results[aname].get(student, "—"))
+                
+                ws.append(row_data)
+                
+                # Estilo de fila
+                for cell in ws[row_idx]:
+                    cell.border = border
+                    if row_idx % 2 == 0:
+                        cell.fill = stripe_fill
+                    if cell.column > 1:
+                        cell.alignment = center_align
 
-                # Filas
-                for student in sorted(students):
-                    row = [student]
-                    if points_enabled:
-                        row.append(points_data.get(student, 0))
-                    for _, aname in selected_activities:
-                        row.append(act_results[aname].get(student, "—"))
-                    writer.writerow(row)
+            # Auto-ajustar ancho de columnas
+            for column_cells in ws.columns:
+                length = max(len(str(cell.value)) for cell in column_cells)
+                ws.column_dimensions[column_cells[0].column_letter].width = length + 5
 
-            messagebox.showinfo("Éxito", f"Archivo guardado correctamente en:\n{filepath}")
+            wb.save(filepath)
+            messagebox.showinfo("Éxito", f"Reporte Excel generado correctamente:\n{filepath}")
             self.show_group_dashboard(group_id)
-            
-            # Log del evento
-            self.db.log_event("registro", group_name, f"Reporte CSV exportado", group_id)
+            self.db.log_event("registro", group_name, "Reporte EXCEL exportado", group_id)
 
         except Exception as e:
-            messagebox.showerror("Error", f"No se pudo guardar el archivo: {e}")
+            messagebox.showerror("Error", f"No se pudo crear el Excel: {e}")
 
     def show_history(self):
         """Muestra el log global de actividad del ClassRoom Clash."""
