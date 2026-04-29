@@ -76,9 +76,10 @@ class SorteoScreenMixin:
         )
         self.btn_reveal.pack(side="left", expand=True, padx=(20, 5))
 
+        back_cmd = lambda: self.show_group_dashboard(self.current_group_id) if getattr(self, 'current_group_id', None) else self.show_main_menu
         self.btn_cancel_sorteo = self._make_btn(
             btn_zone, "🏠   Abandonar Sorteo",
-            self.show_main_menu, color="#6C757D", hover="#495057", px=20, py=14,
+            back_cmd, color="#6C757D", hover="#495057", px=20, py=14,
         )
         self.btn_cancel_sorteo.pack(side="left", expand=True, padx=(5, 20))
 
@@ -247,7 +248,9 @@ class SorteoScreenMixin:
                        self.show_config_screen,
                        color=BTN_PRIMARY, px=30, py=12, font=self.f_btn).pack(side="left", padx=5)
 
-        self._make_btn(btn_frame, "🏠   Menú Principal",
-                       self.show_main_menu,
+        back_cmd = lambda: self.show_group_dashboard(self.current_group_id) if getattr(self, 'current_group_id', None) else self.show_main_menu
+
+        self._make_btn(btn_frame, "🏠   Panel del Grupo",
+                       back_cmd,
                        color="#6C757D", hover="#495057",
                        px=30, py=12, font=self.f_btn).pack(side="left", padx=5)

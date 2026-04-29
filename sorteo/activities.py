@@ -14,20 +14,26 @@ from .constants import (
 class ActivitiesMixin:
     """Mixin para la gestión de actividades y control de entregas."""
 
-    def show_activities_menu(self):
+    def show_activities_menu(self, group_id=None):
         """Pantalla principal de gestión de actividades."""
         self._clear()
+        
+        # Si venimos de un grupo específico, usarlo como contexto
+        target_group_id = group_id or getattr(self, 'current_group_id', None)
+        group_name = getattr(self, 'current_group_name', 'Global') if target_group_id else "Global"
 
         hdr = tk.Frame(self.container, bg=BG_HEADER, pady=12)
         hdr.pack(fill="x")
-        tk.Label(hdr, text="📋  CONTROL DE ACTIVIDADES",
+        tk.Label(hdr, text=f"📋  ACTIVIDADES: {group_name.upper()}",
                  font=self.f_header, bg=BG_HEADER, fg=TEXT_LIGHT).pack()
 
         body = tk.Frame(self.container, bg=BG_MAIN, padx=30, pady=20)
         body.pack(fill="both", expand=True)
 
         # Botón nueva actividad
-        self._make_btn(body, "➕  Nueva Actividad", self._create_activity_dialog,
+        # Botón nueva actividad (si hay grupo cargado, se asigna automáticamente)
+        cmd = lambda: self._create_activity_auto(target_group_id) if target_group_id else self._create_activity_dialog
+        self._make_btn(body, "➕  Nueva Actividad", cmd,
                        color="#06D6A0", px=20, py=10).pack(pady=(0, 20))
 
         tk.Label(body, text="Actividades Recientes:",
@@ -51,7 +57,11 @@ class ActivitiesMixin:
         scrollbar.pack(side="right", fill="y")
 
         try:
-            activities = self.db.get_activities()
+            all_activities = self.db.get_activities()
+            if target_group_id:
+                activities = [a for a in all_activities if a[4] == target_group_id]
+            else:
+                activities = all_activities
         except Exception:
             activities = []
 
@@ -85,8 +95,16 @@ class ActivitiesMixin:
                                lambda a=aid, n=name: self._edit_activity_dialog(a, n),
                                color="#4361EE", px=8, py=5, font=self.f_small).pack(side="left", padx=2)
 
-        self._make_btn(body, "← Volver al Menú", self.show_main_menu,
+        back_cmd = lambda: self.show_group_dashboard(target_group_id) if target_group_id else self.show_main_menu
+        self._make_btn(body, "← Volver", back_cmd,
                        color="#6C757D", hover="#495057", px=20, py=8, font=self.f_body).pack(pady=10)
+
+    def _create_activity_auto(self, group_id):
+        """Crea una actividad directamente para el grupo actual."""
+        name = simpledialog.askstring("Nueva Actividad", "¿Nombre de la tarea?")
+        if name:
+            self.db.create_activity(name, group_id)
+            self.show_activities_menu(group_id)
 
     def _create_activity_dialog(self):
         """Diálogo para crear actividad eligiendo un grupo."""

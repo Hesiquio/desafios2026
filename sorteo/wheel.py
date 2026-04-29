@@ -161,8 +161,9 @@ class WheelMixin:
                        color="#4361EE", px=20, py=8,
                        font=self.f_body).pack(side="left", padx=5)
 
-        self._make_btn(footer_btns, "← Volver al Menú",
-                       self.show_main_menu,
+        back_cmd = lambda: self.show_group_dashboard(self.current_group_id) if getattr(self, 'current_group_id', None) else self.show_main_menu
+        self._make_btn(footer_btns, "← Volver",
+                       back_cmd,
                        color="#6C757D", hover="#495057", px=20, py=8,
                        font=self.f_body).pack(side="left", padx=5)
 

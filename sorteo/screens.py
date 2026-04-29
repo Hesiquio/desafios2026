@@ -86,34 +86,29 @@ class ScreensMixin:
         btn_frame = tk.Frame(body, bg=BG_MAIN)
         btn_frame.pack(fill="both")
 
-        self._make_btn(btn_frame, "🎲   Nuevo Sorteo",
-                       self._pick_group_for_sorteo,
-                       color="#4361EE", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
-
-        self._make_btn(btn_frame, "📁   Gestionar Grupos",
+        self._make_btn(btn_frame, "📁   GESTIONAR GRUPOS",
                        self.show_groups_list,
-                       color="#06D6A0", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
+                       color="#4361EE", px=40, py=20, font=self.f_title).pack(pady=15, fill="x")
 
-        self._make_btn(btn_frame, "🎡   Ruleta de Puntos",
-                       self._pick_group_for_wheel,
-                       color="#F72585", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
+        tk.Label(body, text="Consultas Globales",
+                 font=self.f_small, bg=BG_MAIN, fg=TEXT_MUTED).pack(pady=(20, 10))
 
-        self._make_btn(btn_frame, "📋   Control de Actividades",
-                       self.show_activities_menu,
-                       color="#06D6A0", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
+        grid_cols = tk.Frame(body, bg=BG_MAIN)
+        grid_cols.pack(fill="x")
+        grid_cols.columnconfigure((0, 1), weight=1)
 
-        self._make_btn(btn_frame, "📊   Ver Historial de Sorteos",
+        self._make_btn(grid_cols, "📊   Historial Global",
                        self.show_history,
-                       color="#FF9F1C", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
+                       color="#FF9F1C", px=20, py=12).grid(row=0, column=0, padx=5, sticky="ew")
 
-        self._make_btn(btn_frame, "🏆   Ver Leaderboard",
+        self._make_btn(grid_cols, "🏆   Leaderboard Global",
                        self.show_leaderboard,
-                       color="#FFD60A", px=40, py=16, font=self.f_title).pack(pady=10, fill="x")
+                       color="#FFD60A", px=20, py=12).grid(row=0, column=1, padx=5, sticky="ew")
 
-        self._make_btn(btn_frame, "❌   Salir",
+        self._make_btn(body, "❌   Salir",
                        self.quit,
-                       color="#6C757D", hover="#495057", px=40, py=16,
-                       font=self.f_title).pack(pady=10, fill="x")
+                       color="#6C757D", hover="#495057", px=40, py=12,
+                       font=self.f_body).pack(pady=30, fill="x")
 
     # =========================================================================
     #  PANTALLA — GRUPOS GUARDADOS
@@ -165,9 +160,9 @@ class ScreensMixin:
 
                 bc = tk.Frame(card, bg=BG_CARD)
                 bc.pack(side="right", padx=(10, 0))
-                self._make_btn(bc, "Cargar",
-                               lambda gid=group_id: self._load_and_sort(gid),
-                               color=BTN_PRIMARY, px=12, py=6,
+                self._make_btn(bc, "Gestionar",
+                               lambda gid=group_id: self.show_group_dashboard(gid),
+                               color="#4361EE", px=12, py=6,
                                font=self.f_small).pack(side="left", padx=3)
                 
                 self._make_btn(bc, "✏️",
@@ -187,6 +182,64 @@ class ScreensMixin:
         self._make_btn(body, "← Volver", self.show_main_menu,
                        color="#6C757D", hover="#495057", px=20, py=8,
                        font=self.f_body).pack()
+
+    def show_group_dashboard(self, group_id):
+        """Panel central de control para un grupo específico."""
+        data = self.db.load_group(group_id)
+        if not data: return
+
+        self._clear()
+        self.current_group_id = group_id
+        self.current_group_name = data['name']
+        self.students = data['students'][:]
+
+        hdr = tk.Frame(self.container, bg=BG_HEADER, pady=20)
+        hdr.pack(fill="x")
+        tk.Label(hdr, text=f"📂  GRUPO: {data['name']}",
+                 font=self.f_header, bg=BG_HEADER, fg=TEXT_LIGHT).pack()
+        
+        body = tk.Frame(self.container, bg=BG_MAIN, padx=40, pady=30)
+        body.pack(fill="both", expand=True)
+
+        # Resumen rápido en una tarjeta
+        stats_card = tk.Frame(body, bg=BG_CARD, padx=20, pady=15, 
+                              highlightbackground="#DEE2E6", highlightthickness=1)
+        stats_card.pack(fill="x", pady=(0, 30))
+        
+        tk.Label(stats_card, text=f"📊 Resumen: {len(self.students)} alumnos inscritos", 
+                 font=self.f_title, bg=BG_CARD, fg=TEXT_DARK).pack(side="left")
+        
+        self._make_btn(stats_card, "✏️ Editar Alumnos", 
+                       lambda: self._edit_group_students(group_id),
+                       color="#6C757D", px=15, py=5, font=self.f_small).pack(side="right")
+
+        # Rejilla de acciones
+        actions_frame = tk.Frame(body, bg=BG_MAIN)
+        actions_frame.pack(fill="both", expand=True)
+        actions_frame.columnconfigure((0, 1), weight=1, uniform="equal")
+
+        # Fila 1: Sorteo y Ruleta
+        self._make_btn(actions_frame, "🎲   Sorteo de Equipos\n(Champions Style)",
+                       lambda: self.show_config_screen(group_id),
+                       color="#4361EE", px=20, py=25, font=self.f_title).grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+
+        self._make_btn(actions_frame, "🎡   Ruleta / Tómbola\nde Participación",
+                       self.show_wheel_screen,
+                       color="#F72585", px=20, py=25, font=self.f_title).grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+
+        # Fila 2: Actividades y Ranking
+        self._make_btn(actions_frame, "📋   Control de\nActividades",
+                       self.show_activities_menu,
+                       color="#06D6A0", px=20, py=25, font=self.f_title).grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
+
+        self._make_btn(actions_frame, "🏆   Ranking / Leaderboard\ndel Grupo",
+                       lambda: self.show_leaderboard(group_id),
+                       color="#FFD60A", px=20, py=25, font=self.f_title).grid(row=1, column=1, sticky="nsew", padx=10, pady=10)
+
+        # Botón volver
+        tk.Frame(body, height=0, bg=BG_MAIN).pack(pady=10)
+        self._make_btn(body, "← Volver a Grupos", self.show_groups_list,
+                       color="#6C757D", px=20, py=10).pack()
 
     def _load_and_sort(self, group_id):
         """Carga un grupo y va directamente al sorteo."""
