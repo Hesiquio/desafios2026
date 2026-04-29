@@ -75,121 +75,84 @@ class ScreensMixin:
     # =========================================================================
 
     def show_main_menu(self):
-        """Pantalla inicial con opciones de navegación."""
+        """Pantalla inicial: Lista de grupos y herramientas globales."""
         self._clear()
 
         hdr = tk.Frame(self.container, bg=BG_HEADER, pady=20)
         hdr.pack(fill="x")
         tk.Label(hdr, text="🎮  CLASSROOM CLASH",
                  font=self.f_header, bg=BG_HEADER, fg=TEXT_LIGHT).pack()
-        tk.Label(hdr, text="Sorteos, Ruletas y Control de Actividades",
+        tk.Label(hdr, text="Tus Grupos y Herramientas",
                  font=self.f_small, bg=BG_HEADER, fg=TEXT_MUTED).pack(pady=(3, 0))
 
-        body = tk.Frame(self.container, bg=BG_MAIN, padx=40, pady=30)
+        body = tk.Frame(self.container, bg=BG_MAIN, padx=40, pady=20)
         body.pack(fill="both", expand=True)
 
-        tk.Label(body, text="¿Qué deseas hacer?",
-                 font=self.f_title, bg=BG_MAIN, fg=TEXT_DARK).pack(pady=(0, 30))
-
-        btn_frame = tk.Frame(body, bg=BG_MAIN)
-        btn_frame.pack(fill="both")
-
-        self._make_btn(btn_frame, "📁   GESTIONAR GRUPOS",
-                       self.show_groups_list,
-                       color="#4361EE", px=40, py=20, font=self.f_title).pack(pady=15, fill="x")
-
-        tk.Label(body, text="Consultas Globales",
-                 font=self.f_small, bg=BG_MAIN, fg=TEXT_MUTED).pack(pady=(20, 10))
-
-        grid_cols = tk.Frame(body, bg=BG_MAIN)
-        grid_cols.pack(fill="x")
-        grid_cols.columnconfigure((0, 1), weight=1)
-
-        self._make_btn(grid_cols, "📊   Historial Global",
-                       self.show_history,
-                       color="#FF9F1C", px=20, py=12).grid(row=0, column=0, padx=5, sticky="ew")
-
-        self._make_btn(grid_cols, "🏆   Leaderboard Global",
-                       self.show_leaderboard,
-                       color="#FFD60A", px=20, py=12).grid(row=0, column=1, padx=5, sticky="ew")
-
-        self._make_btn(body, "❌   Salir",
-                       self.quit,
-                       color="#6C757D", hover="#495057", px=40, py=12,
-                       font=self.f_body).pack(pady=30, fill="x")
-
-    # =========================================================================
-    #  PANTALLA — GRUPOS GUARDADOS
-    # =========================================================================
-
-    def show_groups_list(self):
-        """Muestra la lista de grupos guardados para gestionar."""
-        self._clear()
-
-        hdr = tk.Frame(self.container, bg=BG_HEADER, pady=12)
-        hdr.pack(fill="x")
-        tk.Label(hdr, text="📁  GESTIONAR GRUPOS",
-                 font=self.f_header, bg=BG_HEADER, fg=TEXT_LIGHT).pack()
-
-        body = tk.Frame(self.container, bg=BG_MAIN, padx=30, pady=20)
-        body.pack(fill="both", expand=True)
-
-        # Botón para crear nuevo grupo desde aquí
+        # Botón para crear nuevo grupo (Hero)
         self._make_btn(body, "➕  Crear Nuevo Grupo", self.show_create_group_screen,
-                       color="#06D6A0", px=20, py=10).pack(pady=(0, 20))
+                       color="#06D6A0", px=20, py=12, font=self.f_title).pack(pady=(0, 25))
+
+        # Lista de Grupos
+        tk.Label(body, text="MIS GRUPOS:",
+                 font=self.f_title, bg=BG_MAIN, fg=TEXT_DARK).pack(anchor="w", pady=(0, 10))
 
         groups = self.db.get_groups()
 
         if not groups:
-            tk.Label(body, text="No hay grupos guardados aún.",
+            tk.Label(body, text="No hay grupos guardados aún. Crea uno para empezar.",
                      font=self.f_body, bg=BG_MAIN, fg=TEXT_MUTED).pack(pady=20)
         else:
-            canvas = tk.Canvas(body, bg=BG_MAIN, highlightthickness=0)
-            scrollbar = tk.Scrollbar(body, command=canvas.yview)
+            container_list = tk.Frame(body, bg=BG_MAIN)
+            container_list.pack(fill="both", expand=True)
+
+            canvas = tk.Canvas(container_list, bg=BG_MAIN, highlightthickness=0)
+            scrollbar = tk.Scrollbar(container_list, command=canvas.yview)
             sf = tk.Frame(canvas, bg=BG_MAIN)
 
-            sf.bind("<Configure>",
-                    lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-            canvas.create_window((0, 0), window=sf, anchor="nw")
+            sf.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+            canvas_window = canvas.create_window((0, 0), window=sf, anchor="nw")
+            canvas.bind("<Configure>", lambda e: canvas.itemconfigure(canvas_window, width=e.width))
+
             canvas.configure(yscrollcommand=scrollbar.set)
 
             for group_id, group_name, created_at in groups:
-                card = tk.Frame(sf, bg=BG_CARD,
-                                highlightbackground="#DEE2E6", highlightthickness=1,
-                                padx=15, pady=10)
-                card.pack(fill="x", pady=8)
+                card = tk.Frame(sf, bg=BG_CARD, highlightbackground="#DEE2E6", 
+                                highlightthickness=1, padx=15, pady=10)
+                card.pack(fill="x", pady=5)
 
                 info = tk.Frame(card, bg=BG_CARD)
                 info.pack(side="left", fill="both", expand=True)
-                tk.Label(info, text=group_name,
-                         font=self.f_name, bg=BG_CARD, fg=TEXT_DARK).pack(anchor="w")
-                tk.Label(info, text=f"Creado: {created_at}",
-                         font=self.f_small, bg=BG_CARD, fg=TEXT_MUTED).pack(anchor="w")
+                tk.Label(info, text=group_name, font=self.f_name, bg=BG_CARD, fg=TEXT_DARK).pack(anchor="w")
+                tk.Label(info, text=f"Creado: {created_at}", font=self.f_small, bg=BG_CARD, fg=TEXT_MUTED).pack(anchor="w")
 
                 bc = tk.Frame(card, bg=BG_CARD)
-                bc.pack(side="right", padx=(10, 0))
-                self._make_btn(bc, "Gestionar",
-                               lambda gid=group_id: self.show_group_dashboard(gid),
-                               color="#4361EE", px=12, py=6,
-                               font=self.f_small).pack(side="left", padx=3)
+                bc.pack(side="right")
+                self._make_btn(bc, "Gestionar →", lambda gid=group_id: self.show_group_dashboard(gid),
+                               color="#4361EE", px=15, py=6, font=self.f_small).pack(side="left", padx=3)
                 
-                self._make_btn(bc, "✏️",
-                               lambda gid=group_id: self._edit_group_students(gid),
-                               color="#4361EE", px=12, py=6,
-                               font=self.f_small).pack(side="left", padx=3)
-
-                self._make_btn(bc, "Eliminar",
-                               lambda gid=group_id: self._delete_group_confirm(gid),
-                               color="#EF233C", px=12, py=6,
-                               font=self.f_small).pack(side="left", padx=3)
+                self._make_btn(bc, "🗑️", lambda gid=group_id: self._delete_group_confirm(gid),
+                               color="#EF233C", px=10, py=6, font=self.f_small).pack(side="left", padx=3)
 
             canvas.pack(side="left", fill="both", expand=True)
             scrollbar.pack(side="right", fill="y")
 
-        tk.Frame(body, height=0, bg=BG_MAIN).pack(pady=10)
-        self._make_btn(body, "← Volver", self.show_main_menu,
-                       color="#6C757D", hover="#495057", px=20, py=8,
-                       font=self.f_body).pack()
+        # Footer Global
+        tk.Label(body, text="Herramientas Globales",
+                 font=self.f_small, bg=BG_MAIN, fg=TEXT_MUTED).pack(pady=(25, 10))
+
+        grid_cols = tk.Frame(body, bg=BG_MAIN)
+        grid_cols.pack(fill="x")
+        grid_cols.columnconfigure((0, 1, 2), weight=1)
+
+        self._make_btn(grid_cols, "📊 Historial", self.show_history,
+                       color="#FF9F1C", px=10, py=8).grid(row=0, column=0, padx=5, sticky="ew")
+
+        self._make_btn(grid_cols, "🏆 Leaderboard", self.show_leaderboard,
+                       color="#FFD60A", px=10, py=8).grid(row=0, column=1, padx=5, sticky="ew")
+
+        self._make_btn(grid_cols, "❌ Salir", self.quit,
+                       color="#6C757D", px=10, py=8).grid(row=0, column=2, padx=5, sticky="ew")
+
 
     def show_group_dashboard(self, group_id):
         """Panel central de control para un grupo específico."""
@@ -254,8 +217,8 @@ class ScreensMixin:
                        lambda: self.show_export_screen(group_id),
                        color="#3A0CA3", px=20, py=10, font=self.f_title).pack(pady=5)
 
-        self._make_btn(btns_low, "← Volver a Grupos", self.show_groups_list,
-                       color="#6C757D", px=20, py=8).pack(pady=5)
+        self._make_btn(body, "← Volver", self.show_main_menu,
+                       color="#6C757D", px=20, py=10).pack()
 
     def _load_and_sort(self, group_id):
         """Carga un grupo y va directamente al sorteo."""
@@ -275,7 +238,7 @@ class ScreensMixin:
         """Confirma la eliminación de un grupo."""
         if messagebox.askyesno("Confirmar", "¿Eliminar este grupo?"):
             self.db.delete_group(group_id)
-            self.show_groups_list()
+            self.show_main_menu()
 
     def _edit_group_students(self, group_id):
         """Abre un editor para los nombres de los alumnos del grupo."""
@@ -307,7 +270,7 @@ class ScreensMixin:
                 return
             self.db.update_group_students(group_id, new_list)
             win.destroy()
-            self.show_groups_list()
+            self.show_main_menu()
 
         self._make_btn(win, "💾 Guardar Cambios", _save, color="#06D6A0").pack(pady=10)
         self._make_btn(win, "Cancelar", win.destroy, color="#6C757D").pack(pady=5)
@@ -653,7 +616,7 @@ class ScreensMixin:
         groups = self.db.get_groups()
         if not groups:
             if messagebox.askyesno("Sin Grupos", "No tienes grupos guardados. ¿Deseas ir a Gestionar Grupos para crear uno?"):
-                self.show_groups_list()
+                self.show_main_menu()
             return
 
         win = tk.Toplevel(self)
