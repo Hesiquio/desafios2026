@@ -72,9 +72,9 @@ class ScreensMixin:
 
         hdr = tk.Frame(self.container, bg=BG_HEADER, pady=20)
         hdr.pack(fill="x")
-        tk.Label(hdr, text="⚽  GESTOR DE SORTEOS",
+        tk.Label(hdr, text="🎮  CLASSROOM CLASH",
                  font=self.f_header, bg=BG_HEADER, fg=TEXT_LIGHT).pack()
-        tk.Label(hdr, text="Champions League + Ruleta de Puntos",
+        tk.Label(hdr, text="Sorteos, Ruletas y Control de Actividades",
                  font=self.f_small, bg=BG_HEADER, fg=TEXT_MUTED).pack(pady=(3, 0))
 
         body = tk.Frame(self.container, bg=BG_MAIN, padx=40, pady=30)
@@ -223,7 +223,7 @@ class ScreensMixin:
                        lambda: self.show_config_screen(group_id),
                        color="#4361EE", px=20, py=25, font=self.f_title).grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
-        self._make_btn(actions_frame, "🎡   Ruleta / Tómbola\nde Participación",
+        self._make_btn(actions_frame, "🎡   Tómbola Clash\nde Participación",
                        self.show_wheel_screen,
                        color="#F72585", px=20, py=25, font=self.f_title).grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
 

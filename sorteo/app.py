@@ -25,7 +25,7 @@ class SorteoApp(ScreensMixin, SorteoScreenMixin, WheelMixin, ActivitiesMixin, tk
 
     def __init__(self):
         super().__init__()
-        self.title("⚽ Sorteo de Equipos — Champions Style + Ruleta")
+        self.title("🎮 ClassRoom Clash — Toolkit Educativo")
         self.geometry("1050x720")
         self.minsize(850, 620)
         self.configure(bg=BG_MAIN)

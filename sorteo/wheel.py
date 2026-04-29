@@ -44,7 +44,7 @@ class WheelMixin:
 
         hdr = tk.Frame(self.container, bg=BG_HEADER, pady=12)
         hdr.pack(fill="x")
-        tk.Label(hdr, text="🎡  RULETA DE PUNTOS",
+        tk.Label(hdr, text="🎡  TÓMBOLA CLASH",
                  font=self.f_header, bg=BG_HEADER, fg=ACCENT_GOLD).pack()
 
         body = tk.Frame(self.container, bg=BG_MAIN, padx=30, pady=20)
